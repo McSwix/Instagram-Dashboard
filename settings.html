@@ -10,6 +10,86 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    .sync-info-btn {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: help;
+      color: var(--text-tertiary);
+      font-size: 0.625rem;
+      font-weight: 700;
+      line-height: 1;
+      z-index: 2;
+      transition: background 0.2s, color 0.2s;
+    }
+    .sync-info-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .sync-tooltip {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      right: 0;
+      width: 260px;
+      max-width: calc(100vw - 3rem);
+      padding: 0.75rem 0.875rem;
+      background: var(--bg-sidebar);
+      color: rgba(255,255,255,0.9);
+      font-size: 0.75rem;
+      line-height: 1.55;
+      font-weight: 400;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(4px);
+      transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+      z-index: 60;
+      pointer-events: none;
+      text-align: left;
+    }
+    .sync-tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      right: 12px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--bg-sidebar);
+    }
+    .sync-tooltip strong {
+      color: #fff;
+      font-weight: 600;
+    }
+    .sync-info-btn:hover + .sync-tooltip,
+    .sync-tooltip:hover {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    @media (hover: none) {
+      .sync-info-btn:active + .sync-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+    }
+    @media (max-width: 480px) {
+      .sync-tooltip { width: 220px; }
+    }
+  </style>
 </head>
 <body>
 
@@ -60,9 +140,30 @@
             <div id="sync-calls" style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.25rem;"></div>
           </div>
           <div class="flex gap-1" style="gap:0.75rem;flex-wrap:wrap;">
-            <button class="btn btn-primary" id="quick-sync-btn" disabled>Quick Sync</button>
-            <button class="btn btn-secondary" id="full-sync-btn" disabled>Full Sync</button>
-            <button class="btn btn-secondary" id="deep-sync-btn" disabled>Deep Sync</button>
+            <div style="position:relative;display:inline-flex;">
+              <button class="btn btn-primary" id="quick-sync-btn" disabled>Quick Sync</button>
+              <div class="sync-info-btn" data-tooltip="quick-tip">i</div>
+              <div class="sync-tooltip" id="quick-tip">
+                <strong>Quick Sync</strong> — ~3 API calls<br/>
+                Fetches your profile info and daily account insights (follower count, reach, impressions). Runs automatically if data is over 6 hours old.
+              </div>
+            </div>
+            <div style="position:relative;display:inline-flex;">
+              <button class="btn btn-secondary" id="full-sync-btn" disabled>Full Sync</button>
+              <div class="sync-info-btn" data-tooltip="full-tip">i</div>
+              <div class="sync-tooltip" id="full-tip">
+                <strong>Full Sync</strong> — ~55 API calls<br/>
+                Everything in Quick, plus fetches your last 50 posts with individual insights (reach, likes, saves, shares) and audience demographics.
+              </div>
+            </div>
+            <div style="position:relative;display:inline-flex;">
+              <button class="btn btn-secondary" id="deep-sync-btn" disabled>Deep Sync</button>
+              <div class="sync-info-btn" data-tooltip="deep-tip">i</div>
+              <div class="sync-tooltip" id="deep-tip">
+                <strong>Deep Sync</strong> — ~105 API calls<br/>
+                Same as Full Sync but fetches your last 100 posts instead of 50. Use sparingly — takes over half your hourly API limit (200 calls/hr).
+              </div>
+            </div>
           </div>
         </div>
         <div id="sync-progress" class="hidden" style="margin-top:1rem;">
