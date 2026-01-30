@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="styles/main.css" />
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     /* Summary metric cards */
     .summary-grid {
@@ -184,28 +183,6 @@
     .username-item:hover { background: var(--bg-input); }
     .username-item a { color: var(--accent); }
     .username-item a:hover { text-decoration: underline; }
-
-    /* Upload section */
-    .upload-area {
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    .upload-zone {
-      border: 2px dashed var(--border-color);
-      border-radius: var(--radius-md);
-      padding: 2.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .upload-zone:hover {
-      border-color: var(--accent);
-      background: var(--accent-light);
-    }
-    .upload-zone-icon {
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
-    }
 
     /* Empty state */
     .empty-state {
@@ -534,19 +511,6 @@
           <div class="username-grid" id="username-grid"></div>
         </div>
 
-        <!-- Upload Link -->
-        <section class="animate-in" style="margin-bottom:1.5rem;">
-          <a href="upload.html" class="glass-card-static" style="display:flex;align-items:center;gap:1rem;padding:1.25rem;text-decoration:none;transition:box-shadow 0.2s,transform 0.2s;">
-            <div style="width:44px;height:44px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
-            </div>
-            <div style="flex:1;">
-              <div style="font-weight:600;font-size:0.9375rem;color:var(--text-primary);">Upload new data</div>
-              <div style="font-size:0.8125rem;color:var(--text-secondary);">Update your follower analysis with a new Instagram data export</div>
-            </div>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--text-tertiary)"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
-          </a>
-        </section>
       `;
 
       // Wire up summary card clicks
@@ -561,9 +525,6 @@
       document.getElementById('list-search')?.addEventListener('input', (e) => {
         filterUsernames(e.target.value);
       });
-
-      // Wire up upload
-      setupUpload();
 
       AnimatedCounter.observeAll();
     }
@@ -657,192 +618,6 @@
       document.getElementById('list-count').textContent = `${filtered.length} of ${currentFilterUsers.length} accounts`;
     }
 
-    // ---- Upload ----
-    function setupUpload() {
-      const zone = document.getElementById('upload-zone');
-      const fileInput = document.getElementById('file-input');
-      if (!zone || !fileInput) return;
-
-      const statusEl = document.getElementById('upload-status');
-      const progressBar = document.getElementById('upload-progress-bar');
-      const progressText = document.getElementById('upload-progress-text');
-
-      zone.addEventListener('click', () => fileInput.click());
-
-      zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        zone.style.borderColor = 'var(--accent)';
-        zone.style.background = 'var(--accent-light)';
-      });
-
-      zone.addEventListener('dragleave', () => {
-        zone.style.borderColor = '';
-        zone.style.background = '';
-      });
-
-      zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.style.borderColor = '';
-        zone.style.background = '';
-        handleFiles(e.dataTransfer.files);
-      });
-
-      fileInput.addEventListener('change', () => {
-        handleFiles(fileInput.files);
-        fileInput.value = '';
-      });
-
-      async function handleFiles(files) {
-        if (!files.length) return;
-
-        statusEl.classList.remove('hidden');
-        progressBar.style.width = '0%';
-        progressText.textContent = 'Processing files...';
-
-        try {
-          let followers = [];
-          let following = [];
-          let comments = [];
-
-          for (const file of files) {
-            if (file.name.endsWith('.zip')) {
-              progressText.textContent = 'Extracting ZIP...';
-              progressBar.style.width = '20%';
-
-              const zip = await JSZip.loadAsync(file);
-              const parsed = await parseZip(zip);
-              followers = parsed.followers;
-              following = parsed.following;
-              comments = parsed.comments;
-
-            } else if (file.name.endsWith('.json')) {
-              const text = await file.text();
-              const json = JSON.parse(text);
-
-              if (file.name.includes('follower')) {
-                followers = extractUsernames(json);
-              } else if (file.name.includes('following')) {
-                following = extractUsernames(json);
-              } else if (file.name.includes('comment')) {
-                comments = extractComments(json);
-              }
-            }
-          }
-
-          progressText.textContent = 'Saving to Firestore...';
-          progressBar.style.width = '80%';
-
-          const commentedAccounts = [...new Set(comments.map(c => c.username))];
-
-          await Store.addSnapshot({
-            followers,
-            following,
-            comments,
-            followerCount: followers.length,
-            followingCount: following.length,
-            commentedAccounts,
-            commentCount: comments.length
-          });
-
-          await Store.addSync({
-            type: 'manual_upload',
-            followerCount: followers.length,
-            followingCount: following.length,
-            status: 'success'
-          });
-
-          progressBar.style.width = '100%';
-          progressText.textContent = 'Upload complete! Reloading...';
-
-          ToastManager.success('Upload Complete', `${followers.length} followers, ${following.length} following processed.`);
-
-          // Reload the page data
-          setTimeout(() => loadFollowerData(), 500);
-
-        } catch (err) {
-          progressText.textContent = `Error: ${err.message}`;
-          progressBar.style.background = '#ef4444';
-          ToastManager.error('Upload Failed', err.message);
-        }
-      }
-
-      async function parseZip(zip) {
-        let followers = [];
-        let following = [];
-        let comments = [];
-
-        for (const [path, zipEntry] of Object.entries(zip.files)) {
-          if (zipEntry.dir) continue;
-          const name = path.toLowerCase();
-
-          if (name.includes('followers') && name.endsWith('.json')) {
-            try {
-              followers = extractUsernames(JSON.parse(await zipEntry.async('text')));
-            } catch (e) { console.warn('Failed to parse followers:', e); }
-          }
-
-          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
-            try {
-              following = extractUsernames(JSON.parse(await zipEntry.async('text')));
-            } catch (e) { console.warn('Failed to parse following:', e); }
-          }
-
-          if (name.includes('comment') && name.endsWith('.json')) {
-            try {
-              comments = comments.concat(extractComments(JSON.parse(await zipEntry.async('text'))));
-            } catch (e) { console.warn('Failed to parse comments:', e); }
-          }
-        }
-
-        return { followers, following, comments };
-      }
-
-      function extractUsernames(json) {
-        if (Array.isArray(json)) {
-          return json.map(item => {
-            if (item.string_list_data?.[0]?.value) return item.string_list_data[0].value;
-            if (item.value) return item.value;
-            if (typeof item === 'string') return item;
-            return null;
-          }).filter(Boolean);
-        }
-
-        const key = Object.keys(json).find(k =>
-          k.includes('follower') || k.includes('following')
-        );
-        if (key && Array.isArray(json[key])) {
-          return extractUsernames(json[key]);
-        }
-
-        return [];
-      }
-
-      function extractComments(json) {
-        const comments = [];
-
-        function walk(data) {
-          if (Array.isArray(data)) {
-            data.forEach(walk);
-          } else if (data && typeof data === 'object') {
-            if (data.string_list_data || data.value || data.comment) {
-              const text = data.string_list_data?.[0]?.value || data.value || data.comment || '';
-              const username = data.string_list_data?.[0]?.href
-                ? data.title || ''
-                : data.username || data.title || data.author || '';
-              const timestamp = data.string_list_data?.[0]?.timestamp || data.timestamp || 0;
-
-              if (text || username) {
-                comments.push({ username, comment: text, timestamp });
-              }
-            }
-            Object.values(data).forEach(walk);
-          }
-        }
-
-        walk(json);
-        return comments;
-      }
-    }
   </script>
 
 </body>

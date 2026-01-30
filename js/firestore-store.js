@@ -146,6 +146,78 @@ const Store = {
     return snapshot.empty ? null : snapshot.docs[0].data();
   },
 
+  // --- Post Metric Snapshots (for delta tracking) ---
+  // Stores a snapshot of each post's metrics on every sync, so we can
+  // compute "engagement received in the last N days" by diffing snapshots.
+  async savePostSnapshot(igMediaId, metrics) {
+    const ts = new Date().toISOString();
+    const docId = igMediaId + '_' + ts.split('T')[0]; // one snapshot per post per day
+    await getDb().collection('post_snapshots').doc(docId).set({
+      igMediaId,
+      date: ts.split('T')[0],
+      timestamp: ts,
+      likes: metrics.likes || 0,
+      comments: metrics.comments || 0,
+      saves: metrics.saves || 0,
+      shares: metrics.shares || 0,
+      reach: metrics.reach || 0,
+      impressions: metrics.impressions || 0,
+      engagement: metrics.engagement || 0
+    });
+  },
+
+  // Get all snapshots within a date range
+  async getPostSnapshotsRange(startDate, endDate) {
+    const snapshot = await getDb()
+      .collection('post_snapshots')
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .orderBy('date', 'asc')
+      .get();
+    return snapshot.docs.map(d => d.data());
+  },
+
+  // Get the latest snapshot for each post on or before a given date
+  async getPostSnapshotsOnDate(date) {
+    const snapshot = await getDb()
+      .collection('post_snapshots')
+      .where('date', '==', date)
+      .get();
+    return snapshot.docs.map(d => d.data());
+  },
+
+  // Get earliest and latest snapshots for delta calculation
+  async getSnapshotBoundaries(startDate, endDate) {
+    // Get earliest snapshots (one per post at start of period)
+    const startSnaps = await getDb()
+      .collection('post_snapshots')
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .orderBy('date', 'asc')
+      .get();
+
+    if (startSnaps.empty) return { start: {}, end: {} };
+
+    const allSnaps = startSnaps.docs.map(d => d.data());
+
+    // Group by igMediaId, take earliest and latest per post
+    const byPost = {};
+    for (const snap of allSnaps) {
+      if (!byPost[snap.igMediaId]) {
+        byPost[snap.igMediaId] = { earliest: snap, latest: snap };
+      } else {
+        if (snap.date < byPost[snap.igMediaId].earliest.date) {
+          byPost[snap.igMediaId].earliest = snap;
+        }
+        if (snap.date > byPost[snap.igMediaId].latest.date) {
+          byPost[snap.igMediaId].latest = snap;
+        }
+      }
+    }
+
+    return byPost;
+  },
+
   // --- Snapshots (Legacy) ---
   async addSnapshot(data) {
     const ref = await getDb().collection('snapshots').add({

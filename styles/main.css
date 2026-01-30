@@ -725,6 +725,40 @@ h3 { font-size: 1.125rem; }
 
 .section-link:hover { color: var(--text-primary); }
 
+/* ---------- Period Toggle ---------- */
+.period-toggle {
+  display: flex;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.period-btn {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.01em;
+}
+
+.period-btn:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.period-btn.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 /* ---------- Scrollable Row ---------- */
 .scroll-row {
   display: flex;

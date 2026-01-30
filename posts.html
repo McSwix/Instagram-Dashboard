@@ -286,30 +286,30 @@
                 onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2rem;color:var(--text-tertiary);\\'>&#128247;</div>'"
               />
               <span class="post-type-badge">${typeIcon} ${typeLabel}</span>
-              ${rate != null ? `<span class="post-engagement-badge" style="${rateBg}">${Utils.formatPercent(rate)}</span>` : ''}
+              ${rate > 0 ? `<span class="post-engagement-badge" style="${rateBg}">${Utils.formatPercent(rate)}</span>` : ''}
             </div>
             <div class="post-body">
               <div class="post-caption">${post.caption ? Utils.escapeHtml(post.caption) : '<em style="color:var(--text-tertiary)">No caption</em>'}</div>
               <div class="post-date">${Utils.formatDate(post.timestamp)}</div>
               <div class="post-stats">
-                <div class="post-stat">
-                  <div class="post-stat-value">${Utils.formatNumber(post.reach || 0)}</div>
+                ${post.reach ? `<div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.reach)}</div>
                   <div class="post-stat-label">Reach</div>
-                </div>
-                <div class="post-stat">
-                  <div class="post-stat-value">${Utils.formatNumber(post.impressions || 0)}</div>
+                </div>` : ''}
+                ${post.impressions ? `<div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.impressions)}</div>
                   <div class="post-stat-label">Impress.</div>
-                </div>
+                </div>` : ''}
                 <div class="post-stat">
                   <div class="post-stat-value">${Utils.formatNumber(post.likes || 0)}</div>
                   <div class="post-stat-label">Likes</div>
                 </div>
-              </div>
-              <div class="post-stats-row2">
                 <div class="post-stat">
                   <div class="post-stat-value">${Utils.formatNumber(post.comments || 0)}</div>
                   <div class="post-stat-label">Comments</div>
                 </div>
+              </div>
+              <div class="post-stats-row2">
                 <div class="post-stat">
                   <div class="post-stat-value">${Utils.formatNumber(post.saves || 0)}</div>
                   <div class="post-stat-label">Saves</div>
@@ -318,6 +318,10 @@
                   <div class="post-stat-value">${Utils.formatNumber(post.shares || 0)}</div>
                   <div class="post-stat-label">Shares</div>
                 </div>
+                ${post.reach ? `<div class="post-stat">
+                  <div class="post-stat-value" style="color:${rate > avgEngagementRate * 1.2 ? 'var(--color-positive)' : rate < avgEngagementRate * 0.8 ? 'var(--color-negative)' : 'var(--color-warning)'}">${Utils.formatPercent(rate)}</div>
+                  <div class="post-stat-label">Eng. Rate</div>
+                </div>` : ''}
               </div>
             </div>
           </a>

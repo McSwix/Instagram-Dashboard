@@ -192,17 +192,20 @@ const InstagramAPI = {
         }
         return insights;
       } catch (err) {
-        // 400 = unsupported metrics for this media type, try next set
-        // 100 = non-existent/expired media
-        // Some IG error codes also indicate unsupported insights
-        if (err.statusCode === 400 || err.igErrorCode === 100) {
-          console.warn(`Insights metric set failed for ${mediaId}: ${err.message}, trying fallback...`);
-          continue;
-        }
         // For rate limits, re-throw immediately
         if (err instanceof RateLimitError) throw err;
-        // For any other error, log and skip this post rather than crashing the sync
-        console.warn(`Insights error for ${mediaId} (${mediaType}): ${err.message}`);
+
+        // Log full error details so we can diagnose insight failures
+        console.warn(`Insights failed for ${mediaId} (${mediaType}): status=${err.statusCode}, igCode=${err.igErrorCode}, msg="${err.message}", metrics="${metrics}"`);
+
+        // Try next metric set for any API error (400, 403, etc.)
+        // Only bail entirely on non-API errors (network failures etc.)
+        if (err.statusCode) {
+          continue;
+        }
+
+        // Non-HTTP error (network issue, parse error) — skip this post
+        console.warn(`Non-API error for ${mediaId}, skipping post`);
         return null;
       }
     }
@@ -381,6 +384,9 @@ const InstagramAPI = {
         }
 
         await Store.upsertPost(item.id, postData);
+
+        // Save metric snapshot for delta tracking
+        await Store.savePostSnapshot(item.id, postData);
       }
 
       // 4. Account insights (last 7 days)

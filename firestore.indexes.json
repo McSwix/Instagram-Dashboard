@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "post_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
