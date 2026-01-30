@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Followers — IG Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    /* Summary metric cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 1024px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .summary-grid { grid-template-columns: 1fr 1fr; } }
+
+    .summary-card {
+      padding: 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      transition: transform var(--transition-base), box-shadow var(--transition-base);
+    }
+    .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .summary-card.active-filter {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+    .summary-card .card-number {
+      font-family: var(--font-display);
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.125rem;
+    }
+    .summary-card .card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+    }
+
+    /* Health indicators row */
+    .health-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 768px) { .health-row { grid-template-columns: 1fr; } }
+    @media (max-width: 480px) {
+      .summary-card .card-number { font-size: 1.375rem; }
+      .summary-card { padding: 1rem; }
+      .health-value { font-size: 1.125rem; }
+      .username-grid { grid-template-columns: 1fr; }
+      .list-search { max-width: 100%; width: 100%; }
+      .upload-zone { padding: 1.5rem 1rem; }
+    }
+
+    .health-card {
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .health-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 1.25rem;
+    }
+    .health-value {
+      font-family: var(--font-display);
+      font-size: 1.375rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .health-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.125rem;
+    }
+
+    /* Snapshot comparison */
+    .snapshot-comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 640px) { .snapshot-comparison { grid-template-columns: 1fr; } }
+
+    .change-list {
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .change-list li {
+      padding: 0.4rem 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.8125rem;
+    }
+    .change-list li:last-child { border-bottom: none; }
+    .change-list a { color: var(--accent); }
+    .change-list a:hover { text-decoration: underline; }
+
+    /* Wasted comments breakdown */
+    .wasted-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .wasted-table th {
+      text-align: left;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--border-color);
+    }
+    .wasted-table td {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text-primary);
+    }
+    .wasted-table tr:last-child td { border-bottom: none; }
+    .wasted-table .count-cell {
+      font-family: var(--font-display);
+      font-weight: 700;
+      text-align: center;
+      min-width: 50px;
+    }
+    .wasted-table .status-pill {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+    }
+
+    /* Username list panel */
+    .list-panel {
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .list-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .list-search {
+      max-width: 260px;
+    }
+    .username-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.25rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .username-item {
+      padding: 0.4rem 0.625rem;
+      font-size: 0.8125rem;
+      border-radius: var(--radius-sm);
+      transition: background var(--transition-fast);
+    }
+    .username-item:hover { background: var(--bg-input); }
+    .username-item a { color: var(--accent); }
+    .username-item a:hover { text-decoration: underline; }
+
+    /* Upload section */
+    .upload-area {
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .upload-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 2.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-zone:hover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+    .upload-zone-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+    .empty-state-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+      font-size: 1.75rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <div class="section-header animate-in stagger-1" style="margin-bottom:1.5rem;">
+      <h1 class="section-title">Follower Analysis</h1>
+      <span id="snapshot-date" style="font-size:0.8125rem;color:var(--text-tertiary);"></span>
+    </div>
+
+    <!-- Main content area — filled by JS -->
+    <div id="main-content">
+      <div style="text-align:center;padding:3rem;color:var(--text-secondary);">Loading...</div>
+    </div>
+
+  </div>
+
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    let analysisData = null;
+    let activeFilter = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('followers');
+      PageTransition.init();
+      await PasswordModal.show();
+
+      try { Store.init(); } catch (e) { ToastManager.error('Firebase Error', e.message); return; }
+      TokenWarning.check();
+
+      await loadFollowerData();
+    });
+
+    async function loadFollowerData() {
+      const content = document.getElementById('main-content');
+
+      try {
+        const snapshots = await Store.getLatestSnapshots(2);
+
+        if (!snapshots.length) {
+          renderEmptyState(content);
+          return;
+        }
+
+        const latest = snapshots[0];
+        const previous = snapshots.length >= 2 ? snapshots[1] : null;
+
+        // Set snapshot date
+        document.getElementById('snapshot-date').textContent =
+          `Data from ${Utils.formatDate(latest.timestamp)}`;
+
+        // Compute all analysis
+        const followers = latest.followers || [];
+        const following = latest.following || [];
+        const comments = latest.comments || [];
+
+        const followersSet = new Set(followers);
+        const followingSet = new Set(following);
+
+        const notFollowingBack = following.filter(u => !followersSet.has(u));
+        const fans = followers.filter(u => !followingSet.has(u));
+        const mutuals = followers.filter(u => followingSet.has(u));
+
+        // Wasted comments: commented on accounts that don't follow back
+        const commentCounts = {};
+        comments.forEach(c => {
+          if (!c.username) return;
+          if (!commentCounts[c.username]) commentCounts[c.username] = 0;
+          commentCounts[c.username]++;
+        });
+
+        const wastedAccounts = [];
+        const oneSidedEngagement = [];
+        Object.entries(commentCounts).forEach(([username, count]) => {
+          const theyFollowUs = followersSet.has(username);
+          const weFollowThem = followingSet.has(username);
+          if (weFollowThem && !theyFollowUs) {
+            wastedAccounts.push({ username, count });
+          }
+          if (!theyFollowUs && count >= 2) {
+            oneSidedEngagement.push({ username, count, weFollow: weFollowThem });
+          }
+        });
+
+        wastedAccounts.sort((a, b) => b.count - a.count);
+        oneSidedEngagement.sort((a, b) => b.count - a.count);
+
+        // Health metrics
+        const followBackRate = following.length > 0
+          ? Math.round((mutuals.length / following.length) * 100)
+          : 0;
+
+        const fanRatio = followers.length > 0
+          ? Math.round((fans.length / followers.length) * 100)
+          : 0;
+
+        // Snapshot comparison
+        let gained = [];
+        let lost = [];
+        if (previous) {
+          const prevFollowersSet = new Set(previous.followers || []);
+          gained = followers.filter(u => !prevFollowersSet.has(u));
+          lost = (previous.followers || []).filter(u => !followersSet.has(u));
+        }
+
+        // Store for filtering
+        analysisData = {
+          notFollowingBack,
+          fans,
+          mutuals,
+          wastedAccounts,
+          oneSidedEngagement,
+          followBackRate,
+          fanRatio,
+          gained,
+          lost,
+          followers,
+          following,
+          comments,
+          commentCounts,
+          hasPrevious: !!previous
+        };
+
+        renderContent(content);
+
+      } catch (e) {
+        content.innerHTML = `<div class="glass-card-static" style="padding:2rem;text-align:center;color:var(--text-secondary);">Error loading data: ${e.message}</div>`;
+      }
+    }
+
+    function renderContent(container) {
+      const d = analysisData;
+
+      container.innerHTML = `
+        <!-- Summary Cards -->
+        <div class="summary-grid animate-in stagger-2">
+          <div class="glass-card summary-card" data-filter="notFollowingBack">
+            <div class="metric-icon red" style="margin:0 auto 0.75rem;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="card-number" style="color:var(--color-negative);">${d.notFollowingBack.length}</div>
+            <div class="card-label">Not Following Back</div>
+          </div>
+          <div class="glass-card summary-card" data-filter="mutuals">
+            <div class="metric-icon blue" style="margin:0 auto 0.75rem;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>
+            </div>
+            <div class="card-number" style="color:var(--color-info);">${d.mutuals.length}</div>
+            <div class="card-label">Mutual Followers</div>
+          </div>
+          <div class="glass-card summary-card" data-filter="fans">
+            <div class="metric-icon green" style="margin:0 auto 0.75rem;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="card-number" style="color:var(--color-positive);">${d.fans.length}</div>
+            <div class="card-label">Fans (Don't Follow)</div>
+          </div>
+          <div class="glass-card summary-card" data-filter="oneSided">
+            <div class="metric-icon orange" style="margin:0 auto 0.75rem;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+            </div>
+            <div class="card-number" style="color:#ea580c;">${d.oneSidedEngagement.length}</div>
+            <div class="card-label">One-Sided Engagement</div>
+          </div>
+        </div>
+
+        <!-- Health Indicators -->
+        <div class="health-row animate-in stagger-3">
+          <div class="glass-card-static health-card">
+            <div class="health-icon" style="background:#dbeafe;color:#2563eb;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            </div>
+            <div>
+              <div class="health-value">${d.followBackRate}%</div>
+              <div class="health-label">Follow-Back Rate</div>
+            </div>
+          </div>
+          <div class="glass-card-static health-card">
+            <div class="health-icon" style="background:#dcfce7;color:#16a34a;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+            </div>
+            <div>
+              <div class="health-value">${d.fanRatio}%</div>
+              <div class="health-label">Fan Ratio (organic followers)</div>
+            </div>
+          </div>
+          <div class="glass-card-static health-card">
+            <div class="health-icon" style="background:#fef3c7;color:#d97706;">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
+            </div>
+            <div>
+              <div class="health-value">${d.wastedAccounts.length}</div>
+              <div class="health-label">Wasted comment accounts</div>
+            </div>
+          </div>
+        </div>
+
+        ${d.hasPrevious ? `
+        <!-- Snapshot Comparison -->
+        <section class="animate-in stagger-4" style="margin-bottom:1.5rem;">
+          <div class="section-header"><h2 class="section-title">Changes Since Last Upload</h2></div>
+          <div class="snapshot-comparison">
+            <div class="glass-card-static" style="padding:1.25rem;">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <span style="color:var(--color-positive);font-weight:700;font-size:1.125rem;">+${d.gained.length}</span>
+                <span style="font-size:0.8125rem;color:var(--text-secondary);">New Followers</span>
+              </div>
+              ${d.gained.length ? `
+                <ul class="change-list">
+                  ${d.gained.slice(0, 50).map(u => `<li><a href="https://instagram.com/${encodeURIComponent(u)}" target="_blank" rel="noopener">@${Utils.escapeHtml(u)}</a></li>`).join('')}
+                  ${d.gained.length > 50 ? `<li style="color:var(--text-tertiary);font-style:italic;">...and ${d.gained.length - 50} more</li>` : ''}
+                </ul>
+              ` : '<div style="color:var(--text-tertiary);font-size:0.8125rem;">No new followers</div>'}
+            </div>
+            <div class="glass-card-static" style="padding:1.25rem;">
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <span style="color:var(--color-negative);font-weight:700;font-size:1.125rem;">-${d.lost.length}</span>
+                <span style="font-size:0.8125rem;color:var(--text-secondary);">Lost Followers</span>
+              </div>
+              ${d.lost.length ? `
+                <ul class="change-list">
+                  ${d.lost.slice(0, 50).map(u => `<li><a href="https://instagram.com/${encodeURIComponent(u)}" target="_blank" rel="noopener">@${Utils.escapeHtml(u)}</a></li>`).join('')}
+                  ${d.lost.length > 50 ? `<li style="color:var(--text-tertiary);font-style:italic;">...and ${d.lost.length - 50} more</li>` : ''}
+                </ul>
+              ` : '<div style="color:var(--text-tertiary);font-size:0.8125rem;">No lost followers</div>'}
+            </div>
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Wasted Comments Breakdown -->
+        ${d.wastedAccounts.length ? `
+        <section class="animate-in stagger-5" style="margin-bottom:1.5rem;">
+          <div class="section-header"><h2 class="section-title">Wasted Comments Breakdown</h2></div>
+          <div class="glass-card-static" style="padding:1.25rem;overflow-x:auto;">
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:1rem;">
+              Accounts you've commented on that don't follow you back &mdash; ranked by comment count.
+            </p>
+            <table class="wasted-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th style="text-align:center;">Comments</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${d.wastedAccounts.slice(0, 25).map(w => `
+                  <tr>
+                    <td><a href="https://instagram.com/${encodeURIComponent(w.username)}" target="_blank" rel="noopener" style="color:var(--accent);">@${Utils.escapeHtml(w.username)}</a></td>
+                    <td class="count-cell">${w.count}</td>
+                    <td><span class="status-pill" style="background:#fee2e2;color:#dc2626;">Not following back</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ${d.wastedAccounts.length > 25 ? `<div style="text-align:center;margin-top:0.75rem;font-size:0.8125rem;color:var(--text-tertiary);">Showing top 25 of ${d.wastedAccounts.length}</div>` : ''}
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- One-Sided Engagement -->
+        ${d.oneSidedEngagement.length ? `
+        <section class="animate-in stagger-6" style="margin-bottom:1.5rem;">
+          <div class="section-header"><h2 class="section-title">One-Sided Engagement</h2></div>
+          <div class="glass-card-static" style="padding:1.25rem;overflow-x:auto;">
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:1rem;">
+              Accounts you've commented on 2+ times that don't follow you &mdash; your effort isn't being returned.
+            </p>
+            <table class="wasted-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th style="text-align:center;">Your Comments</th>
+                  <th>You Follow?</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${d.oneSidedEngagement.slice(0, 25).map(w => `
+                  <tr>
+                    <td><a href="https://instagram.com/${encodeURIComponent(w.username)}" target="_blank" rel="noopener" style="color:var(--accent);">@${Utils.escapeHtml(w.username)}</a></td>
+                    <td class="count-cell">${w.count}</td>
+                    <td>${w.weFollow
+                      ? '<span class="status-pill" style="background:#fef3c7;color:#d97706;">Yes — consider unfollowing</span>'
+                      : '<span class="status-pill" style="background:var(--bg-input);color:var(--text-tertiary);">No</span>'
+                    }</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ${d.oneSidedEngagement.length > 25 ? `<div style="text-align:center;margin-top:0.75rem;font-size:0.8125rem;color:var(--text-tertiary);">Showing top 25 of ${d.oneSidedEngagement.length}</div>` : ''}
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Filtered Username List -->
+        <div class="glass-card-static list-panel animate-in" id="list-panel" style="display:none;">
+          <div class="list-panel-header">
+            <h3 id="list-title" style="font-family:var(--font-display);"></h3>
+            <div class="flex items-center" style="gap:0.75rem;">
+              <span id="list-count" style="font-size:0.8125rem;color:var(--text-secondary);"></span>
+              <input type="text" class="input list-search" id="list-search" placeholder="Search usernames..." />
+            </div>
+          </div>
+          <div class="username-grid" id="username-grid"></div>
+        </div>
+
+        <!-- Upload Section -->
+        <section class="animate-in" style="margin-bottom:1.5rem;">
+          <div class="section-header"><h2 class="section-title">Upload New Data</h2></div>
+          <div class="glass-card-static upload-area">
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:1rem;">
+              Upload a new Instagram data export to update your follower analysis.
+              Request your data from Instagram &rarr; Settings &rarr; Privacy &rarr; Download your data.
+            </p>
+            <div class="upload-zone" id="upload-zone">
+              <div class="upload-zone-icon">&#128193;</div>
+              <div style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.25rem;">Drop ZIP or JSON files here</div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);">or click to browse</div>
+              <input type="file" id="file-input" accept=".zip,.json" multiple style="display:none;" />
+            </div>
+            <div id="upload-status" class="hidden" style="margin-top:1rem;">
+              <div class="progress-bar" style="margin-bottom:0.5rem;">
+                <div class="progress-bar-fill" id="upload-progress-bar" style="width:0%"></div>
+              </div>
+              <div id="upload-progress-text" style="font-size:0.75rem;color:var(--text-secondary);"></div>
+            </div>
+          </div>
+        </section>
+      `;
+
+      // Wire up summary card clicks
+      container.querySelectorAll('.summary-card[data-filter]').forEach(card => {
+        card.addEventListener('click', () => {
+          const filter = card.dataset.filter;
+          toggleFilter(filter, card);
+        });
+      });
+
+      // Wire up search
+      document.getElementById('list-search')?.addEventListener('input', (e) => {
+        filterUsernames(e.target.value);
+      });
+
+      // Wire up upload
+      setupUpload();
+
+      AnimatedCounter.observeAll();
+    }
+
+    function renderEmptyState(container) {
+      container.innerHTML = `
+        <div class="glass-card-static empty-state animate-in stagger-2">
+          <div class="empty-state-icon">
+            <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+          </div>
+          <h2 style="margin-bottom:0.5rem;">No follower data yet</h2>
+          <p style="color:var(--text-secondary);font-size:0.875rem;max-width:400px;margin:0 auto 1.5rem;">
+            Upload your Instagram data export to see who's not following back, your fans, mutual followers, and where you're wasting engagement.
+          </p>
+          <div class="glass-card-static upload-area" style="max-width:500px;margin:0 auto;">
+            <div class="upload-zone" id="upload-zone">
+              <div class="upload-zone-icon">&#128193;</div>
+              <div style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.25rem;">Drop ZIP or JSON files here</div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);">or click to browse</div>
+              <input type="file" id="file-input" accept=".zip,.json" multiple style="display:none;" />
+            </div>
+            <div id="upload-status" class="hidden" style="margin-top:1rem;">
+              <div class="progress-bar" style="margin-bottom:0.5rem;">
+                <div class="progress-bar-fill" id="upload-progress-bar" style="width:0%"></div>
+              </div>
+              <div id="upload-progress-text" style="font-size:0.75rem;color:var(--text-secondary);"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      setupUpload();
+    }
+
+    // ---- Filter / List ----
+    let currentFilterUsers = [];
+
+    function toggleFilter(filter, card) {
+      const panel = document.getElementById('list-panel');
+      const titleEl = document.getElementById('list-title');
+      const countEl = document.getElementById('list-count');
+      const searchEl = document.getElementById('list-search');
+
+      // Toggle off
+      if (activeFilter === filter) {
+        activeFilter = null;
+        panel.style.display = 'none';
+        document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active-filter'));
+        return;
+      }
+
+      activeFilter = filter;
+      document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active-filter'));
+      card.classList.add('active-filter');
+
+      const d = analysisData;
+      const labels = {
+        notFollowingBack: 'Not Following Back',
+        mutuals: 'Mutual Followers',
+        fans: 'Fans',
+        oneSided: 'One-Sided Engagement'
+      };
+
+      let users = [];
+      if (filter === 'notFollowingBack') users = d.notFollowingBack;
+      else if (filter === 'mutuals') users = d.mutuals;
+      else if (filter === 'fans') users = d.fans;
+      else if (filter === 'oneSided') users = d.oneSidedEngagement.map(e => e.username);
+
+      currentFilterUsers = users.sort((a, b) => a.localeCompare(b));
+
+      titleEl.textContent = labels[filter] || filter;
+      countEl.textContent = `${users.length} accounts`;
+      searchEl.value = '';
+      panel.style.display = 'block';
+
+      renderUsernames(currentFilterUsers);
+
+      // Scroll to panel
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function renderUsernames(users) {
+      const grid = document.getElementById('username-grid');
+      if (!users.length) {
+        grid.innerHTML = '<div style="padding:1rem;color:var(--text-tertiary);font-size:0.8125rem;">No accounts found.</div>';
+        return;
+      }
+      grid.innerHTML = users.map(u =>
+        `<div class="username-item"><a href="https://instagram.com/${encodeURIComponent(u)}" target="_blank" rel="noopener">@${Utils.escapeHtml(u)}</a></div>`
+      ).join('');
+    }
+
+    function filterUsernames(query) {
+      const q = query.toLowerCase().trim();
+      if (!q) {
+        renderUsernames(currentFilterUsers);
+        document.getElementById('list-count').textContent = `${currentFilterUsers.length} accounts`;
+        return;
+      }
+      const filtered = currentFilterUsers.filter(u => u.toLowerCase().includes(q));
+      renderUsernames(filtered);
+      document.getElementById('list-count').textContent = `${filtered.length} of ${currentFilterUsers.length} accounts`;
+    }
+
+    // ---- Upload ----
+    function setupUpload() {
+      const zone = document.getElementById('upload-zone');
+      const fileInput = document.getElementById('file-input');
+      if (!zone || !fileInput) return;
+
+      const statusEl = document.getElementById('upload-status');
+      const progressBar = document.getElementById('upload-progress-bar');
+      const progressText = document.getElementById('upload-progress-text');
+
+      zone.addEventListener('click', () => fileInput.click());
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--accent)';
+        zone.style.background = 'var(--accent-light)';
+      });
+
+      zone.addEventListener('dragleave', () => {
+        zone.style.borderColor = '';
+        zone.style.background = '';
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.style.borderColor = '';
+        zone.style.background = '';
+        handleFiles(e.dataTransfer.files);
+      });
+
+      fileInput.addEventListener('change', () => {
+        handleFiles(fileInput.files);
+        fileInput.value = '';
+      });
+
+      async function handleFiles(files) {
+        if (!files.length) return;
+
+        statusEl.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Processing files...';
+
+        try {
+          let followers = [];
+          let following = [];
+          let comments = [];
+
+          for (const file of files) {
+            if (file.name.endsWith('.zip')) {
+              progressText.textContent = 'Extracting ZIP...';
+              progressBar.style.width = '20%';
+
+              const zip = await JSZip.loadAsync(file);
+              const parsed = await parseZip(zip);
+              followers = parsed.followers;
+              following = parsed.following;
+              comments = parsed.comments;
+
+            } else if (file.name.endsWith('.json')) {
+              const text = await file.text();
+              const json = JSON.parse(text);
+
+              if (file.name.includes('follower')) {
+                followers = extractUsernames(json);
+              } else if (file.name.includes('following')) {
+                following = extractUsernames(json);
+              } else if (file.name.includes('comment')) {
+                comments = extractComments(json);
+              }
+            }
+          }
+
+          progressText.textContent = 'Saving to Firestore...';
+          progressBar.style.width = '80%';
+
+          const commentedAccounts = [...new Set(comments.map(c => c.username))];
+
+          await Store.addSnapshot({
+            followers,
+            following,
+            comments,
+            followerCount: followers.length,
+            followingCount: following.length,
+            commentedAccounts,
+            commentCount: comments.length
+          });
+
+          await Store.addSync({
+            type: 'manual_upload',
+            followerCount: followers.length,
+            followingCount: following.length,
+            status: 'success'
+          });
+
+          progressBar.style.width = '100%';
+          progressText.textContent = 'Upload complete! Reloading...';
+
+          ToastManager.success('Upload Complete', `${followers.length} followers, ${following.length} following processed.`);
+
+          // Reload the page data
+          setTimeout(() => loadFollowerData(), 500);
+
+        } catch (err) {
+          progressText.textContent = `Error: ${err.message}`;
+          progressBar.style.background = '#ef4444';
+          ToastManager.error('Upload Failed', err.message);
+        }
+      }
+
+      async function parseZip(zip) {
+        let followers = [];
+        let following = [];
+        let comments = [];
+
+        for (const [path, zipEntry] of Object.entries(zip.files)) {
+          if (zipEntry.dir) continue;
+          const name = path.toLowerCase();
+
+          if (name.includes('followers') && name.endsWith('.json')) {
+            try {
+              followers = extractUsernames(JSON.parse(await zipEntry.async('text')));
+            } catch (e) { console.warn('Failed to parse followers:', e); }
+          }
+
+          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
+            try {
+              following = extractUsernames(JSON.parse(await zipEntry.async('text')));
+            } catch (e) { console.warn('Failed to parse following:', e); }
+          }
+
+          if (name.includes('comment') && name.endsWith('.json')) {
+            try {
+              comments = comments.concat(extractComments(JSON.parse(await zipEntry.async('text'))));
+            } catch (e) { console.warn('Failed to parse comments:', e); }
+          }
+        }
+
+        return { followers, following, comments };
+      }
+
+      function extractUsernames(json) {
+        if (Array.isArray(json)) {
+          return json.map(item => {
+            if (item.string_list_data?.[0]?.value) return item.string_list_data[0].value;
+            if (item.value) return item.value;
+            if (typeof item === 'string') return item;
+            return null;
+          }).filter(Boolean);
+        }
+
+        const key = Object.keys(json).find(k =>
+          k.includes('follower') || k.includes('following')
+        );
+        if (key && Array.isArray(json[key])) {
+          return extractUsernames(json[key]);
+        }
+
+        return [];
+      }
+
+      function extractComments(json) {
+        const comments = [];
+
+        function walk(data) {
+          if (Array.isArray(data)) {
+            data.forEach(walk);
+          } else if (data && typeof data === 'object') {
+            if (data.string_list_data || data.value || data.comment) {
+              const text = data.string_list_data?.[0]?.value || data.value || data.comment || '';
+              const username = data.string_list_data?.[0]?.href
+                ? data.title || ''
+                : data.username || data.title || data.author || '';
+              const timestamp = data.string_list_data?.[0]?.timestamp || data.timestamp || 0;
+
+              if (text || username) {
+                comments.push({ username, comment: text, timestamp });
+              }
+            }
+            Object.values(data).forEach(walk);
+          }
+        }
+
+        walk(json);
+        return comments;
+      }
+    }
+  </script>
+
+</body>
+</html>

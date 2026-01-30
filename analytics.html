@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Analytics — IG Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .chart-card {
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .chart-card h3 {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      font-family: var(--font-display);
+    }
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      max-height: 320px;
+    }
+
+    /* Goal tracker */
+    .goal-section {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .goal-circle-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .goal-info { flex: 1; min-width: 200px; }
+    .goal-input-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    /* Top posts */
+    .top-posts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .top-post-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem;
+      background: var(--bg-input);
+      border-radius: var(--radius-md);
+    }
+    .top-post-rank {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--text-tertiary);
+      min-width: 2rem;
+      text-align: center;
+    }
+    .top-post-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      background: var(--bg-input);
+      flex-shrink: 0;
+    }
+    .top-post-info { flex: 1; min-width: 0; }
+    .top-post-caption {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .top-post-stats {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-top: 0.15rem;
+    }
+    .top-post-rate {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: right;
+      min-width: 60px;
+    }
+
+    /* Heatmap */
+    .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .heatmap-table { min-width: 600px; }
+    .heatmap-table td { padding: 2px; }
+    .heatmap-legend {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+    }
+    .heatmap-legend-block {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+    }
+
+    .best-times-list {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .best-time-chip {
+      padding: 0.5rem 1rem;
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--color-positive);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 480px) {
+      .goal-section { gap: 1rem; }
+      .goal-info { min-width: 0; }
+      .goal-input-row { flex-wrap: wrap; }
+      .goal-input-row input { max-width: 100%; flex: 1; }
+      .top-post-item { gap: 0.625rem; padding: 0.625rem; }
+      .top-post-thumb { width: 40px; height: 40px; }
+      .top-post-rate { font-size: 0.875rem; min-width: 48px; }
+      .chart-card { padding: 1rem 0.75rem; }
+      .best-time-chip { padding: 0.4rem 0.75rem; font-size: 0.75rem; }
+      .heatmap-table { min-width: 500px; }
+    }
+
+    .no-data-msg {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <h1 class="section-title animate-in stagger-1" style="margin-bottom:1.25rem;">Analytics</h1>
+
+    <!-- Tabs -->
+    <div class="tabs animate-in stagger-2" id="tabs">
+      <button class="tab active" data-tab="growth">Growth</button>
+      <button class="tab" data-tab="posts">Posts</button>
+      <button class="tab" data-tab="audience">Audience</button>
+      <button class="tab" data-tab="best-times">Best Times</button>
+    </div>
+
+    <!-- Growth Tab -->
+    <div class="tab-content active" id="tab-growth">
+      <div id="growth-content"><div class="no-data-msg">Loading...</div></div>
+    </div>
+
+    <!-- Posts Tab -->
+    <div class="tab-content" id="tab-posts">
+      <div id="posts-content"><div class="no-data-msg">Loading...</div></div>
+    </div>
+
+    <!-- Audience Tab -->
+    <div class="tab-content" id="tab-audience">
+      <div id="audience-content"><div class="no-data-msg">Loading...</div></div>
+    </div>
+
+    <!-- Best Times Tab -->
+    <div class="tab-content" id="tab-best-times">
+      <div id="best-times-content"><div class="no-data-msg">Loading...</div></div>
+    </div>
+
+  </div>
+
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    // ---- Chart.js defaults ----
+    Chart.defaults.color = '#6b7280';
+    Chart.defaults.borderColor = '#e5e7eb';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.plugins.legend.labels.boxWidth = 12;
+    Chart.defaults.plugins.legend.labels.padding = 16;
+
+    const chartInstances = {};
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('analytics');
+      PageTransition.init();
+      await PasswordModal.show();
+
+      try { Store.init(); } catch (e) { ToastManager.error('Firebase Error', e.message); return; }
+      TokenWarning.check();
+
+      // Tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+          // Lazy load
+          loadTabData(tab.dataset.tab);
+        });
+      });
+
+      loadTabData('growth');
+      AutoSync.run();
+    });
+
+    const loaded = {};
+    async function loadTabData(tab) {
+      if (loaded[tab]) return;
+      loaded[tab] = true;
+
+      try {
+        if (tab === 'growth') await renderGrowth();
+        else if (tab === 'posts') await renderPostsTab();
+        else if (tab === 'audience') await renderAudience();
+        else if (tab === 'best-times') await renderBestTimes();
+      } catch (e) {
+        document.getElementById(tab + '-content').innerHTML =
+          `<div class="no-data-msg">Error loading data: ${e.message}</div>`;
+      }
+    }
+
+    // =============== GROWTH TAB ===============
+    async function renderGrowth() {
+      const container = document.getElementById('growth-content');
+      const syncs = await Store.getRecentSyncs(100);
+      const apiSyncs = syncs
+        .filter(s => s.type === 'api' && s.status === 'success' && s.followerCount)
+        .reverse();
+
+      if (apiSyncs.length < 1) {
+        container.innerHTML = '<div class="no-data-msg">No sync data yet. Run a sync from <a href="settings.html" style="color:var(--accent);text-decoration:underline;">Settings</a>.</div>';
+        return;
+      }
+
+      const latestFollowers = apiSyncs[apiSyncs.length - 1]?.followerCount || 0;
+      const savedGoal = localStorage.getItem('ig_follower_goal') || '';
+
+      container.innerHTML = `
+        <!-- Goal Tracker -->
+        <div class="glass-card chart-card">
+          <h3>Follower Goal</h3>
+          <div class="goal-section">
+            <div class="goal-circle-wrap">
+              <div class="circular-progress" id="goal-circle">
+                <svg width="120" height="120">
+                  <defs>
+                    <linearGradient id="ig-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="var(--ig-purple)" />
+                      <stop offset="100%" stop-color="var(--ig-pink)" />
+                    </linearGradient>
+                  </defs>
+                  <circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="8" />
+                  <circle class="fill" cx="60" cy="60" r="52" fill="none" stroke-width="8"
+                    stroke-dasharray="326.73"
+                    stroke-dashoffset="326.73"
+                    id="goal-fill" />
+                </svg>
+                <span class="value" id="goal-pct" style="font-size:1.25rem;">—</span>
+              </div>
+            </div>
+            <div class="goal-info">
+              <div style="font-size:0.8125rem;color:var(--text-secondary);">Current followers</div>
+              <div style="font-family:var(--font-display);font-size:1.5rem;font-weight:700;">${Utils.formatNumber(latestFollowers)}</div>
+              <div class="goal-input-row">
+                <input type="number" class="input" id="goal-input" placeholder="Set goal (e.g. 5000)" value="${savedGoal}" style="max-width:180px;" />
+                <button class="btn btn-primary" id="goal-set-btn">Set</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Follower Growth Line -->
+        <div class="glass-card chart-card">
+          <h3>Follower Growth</h3>
+          <div class="chart-wrap"><canvas id="chart-followers"></canvas></div>
+        </div>
+
+        <!-- Weekly Growth Bars -->
+        <div class="glass-card chart-card">
+          <h3>Weekly Change</h3>
+          <div class="chart-wrap"><canvas id="chart-weekly"></canvas></div>
+        </div>
+      `;
+
+      // Goal circle logic
+      updateGoalCircle(latestFollowers, parseInt(savedGoal) || 0);
+      document.getElementById('goal-set-btn').addEventListener('click', () => {
+        const goal = parseInt(document.getElementById('goal-input').value);
+        if (goal > 0) {
+          localStorage.setItem('ig_follower_goal', goal);
+          updateGoalCircle(latestFollowers, goal);
+          ToastManager.success('Goal Set', `Target: ${Utils.formatNumber(goal)} followers`);
+        }
+      });
+
+      // Follower growth chart
+      const labels = apiSyncs.map(s => {
+        const d = new Date(s.timestamp);
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      });
+
+      createChart('chart-followers', 'line', {
+        labels,
+        datasets: [{
+          label: 'Followers',
+          data: apiSyncs.map(s => s.followerCount),
+          borderColor: '#8134AF',
+          backgroundColor: 'rgba(129,52,175,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#8134AF'
+        }, {
+          label: 'Following',
+          data: apiSyncs.map(s => s.followingCount),
+          borderColor: '#515BD4',
+          backgroundColor: 'rgba(81,91,212,0.05)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#515BD4'
+        }]
+      });
+
+      // Weekly growth bars
+      const weeklyData = computeWeeklyGrowth(apiSyncs);
+      createChart('chart-weekly', 'bar', {
+        labels: weeklyData.map(w => w.label),
+        datasets: [{
+          label: 'Follower Change',
+          data: weeklyData.map(w => w.change),
+          backgroundColor: weeklyData.map(w => w.change >= 0 ? 'rgba(50,215,75,0.6)' : 'rgba(255,69,58,0.6)'),
+          borderRadius: 4
+        }]
+      });
+    }
+
+    function updateGoalCircle(current, goal) {
+      const fill = document.getElementById('goal-fill');
+      const pct = document.getElementById('goal-pct');
+      if (!fill || !goal) {
+        if (pct) pct.textContent = '—';
+        return;
+      }
+      const progress = Math.min(current / goal, 1);
+      const circumference = 326.73;
+      fill.style.strokeDashoffset = circumference * (1 - progress);
+      pct.textContent = Math.round(progress * 100) + '%';
+    }
+
+    function computeWeeklyGrowth(syncs) {
+      if (syncs.length < 2) return [];
+      const weeks = {};
+      syncs.forEach(s => {
+        const d = new Date(s.timestamp);
+        // ISO week start
+        const weekStart = new Date(d);
+        weekStart.setDate(d.getDate() - d.getDay());
+        const key = weekStart.toISOString().split('T')[0];
+        if (!weeks[key]) weeks[key] = { first: s.followerCount, last: s.followerCount, label: '' };
+        weeks[key].last = s.followerCount;
+        weeks[key].label = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      });
+      return Object.values(weeks).map(w => ({
+        label: w.label,
+        change: w.last - w.first
+      }));
+    }
+
+    // =============== POSTS TAB ===============
+    async function renderPostsTab() {
+      const container = document.getElementById('posts-content');
+      const posts = await Store.getAllPosts('timestamp', 'desc');
+
+      if (!posts.length) {
+        container.innerHTML = '<div class="no-data-msg">No posts synced yet. Run a Full Sync from <a href="settings.html" style="color:var(--accent);text-decoration:underline;">Settings</a>.</div>';
+        return;
+      }
+
+      const recent30 = posts.slice(0, 30);
+      const recent20 = posts.slice(0, 20);
+      const top5 = [...posts].sort((a, b) => (b.engagementRate || 0) - (a.engagementRate || 0)).slice(0, 5);
+
+      container.innerHTML = `
+        <div class="two-col">
+          <div class="glass-card chart-card">
+            <h3>Engagement by Post</h3>
+            <div class="chart-wrap"><canvas id="chart-engagement"></canvas></div>
+          </div>
+          <div class="glass-card chart-card">
+            <h3>Reach Trend</h3>
+            <div class="chart-wrap"><canvas id="chart-reach-trend"></canvas></div>
+          </div>
+        </div>
+
+        <div class="glass-card chart-card">
+          <h3>Top 5 Posts by Engagement Rate</h3>
+          <div class="top-posts-list">
+            ${top5.map((p, i) => `
+              <a href="${p.permalink || '#'}" target="_blank" rel="noopener" class="top-post-item">
+                <div class="top-post-rank">#${i + 1}</div>
+                <img src="${p.thumbnailUrl || p.mediaUrl || ''}" alt="" class="top-post-thumb" onerror="this.style.display='none'" />
+                <div class="top-post-info">
+                  <div class="top-post-caption">${Utils.escapeHtml(Utils.truncate(p.caption, 60)) || 'No caption'}</div>
+                  <div class="top-post-stats">${Utils.formatDate(p.timestamp)} &bull; ${Utils.formatNumber(p.reach || 0)} reach &bull; ${Utils.formatNumber(p.engagement || 0)} eng.</div>
+                </div>
+                <div class="top-post-rate engagement-high">${Utils.formatPercent(p.engagementRate)}</div>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      // Engagement bar chart
+      const engLabels = recent20.reverse().map((p, i) => `#${i + 1}`);
+      createChart('chart-engagement', 'bar', {
+        labels: engLabels,
+        datasets: [{
+          label: 'Engagement',
+          data: [...recent20].map(p => p.engagement || 0),
+          backgroundColor: 'rgba(129,52,175,0.6)',
+          borderRadius: 4
+        }]
+      });
+
+      // Reach trend line
+      const reachPosts = [...recent30].reverse();
+      createChart('chart-reach-trend', 'line', {
+        labels: reachPosts.map(p => {
+          const d = new Date(p.timestamp);
+          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }),
+        datasets: [{
+          label: 'Reach',
+          data: reachPosts.map(p => p.reach || 0),
+          borderColor: '#515BD4',
+          backgroundColor: 'rgba(81,91,212,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 2
+        }]
+      });
+    }
+
+    // =============== AUDIENCE TAB ===============
+    async function renderAudience() {
+      const container = document.getElementById('audience-content');
+      const latest = await Store.getLatestAccountInsight();
+
+      if (!latest?.audienceGenderAge || !Object.keys(latest.audienceGenderAge).length) {
+        container.innerHTML = '<div class="no-data-msg">No audience data yet. Run a Full Sync (requires 100+ followers).</div>';
+        return;
+      }
+
+      const genderAge = latest.audienceGenderAge;
+      const countries = latest.audienceCountry || {};
+      const cities = latest.audienceCity || {};
+
+      // Process gender
+      let female = 0, male = 0, unknown = 0;
+      const ageRanges = {};
+      Object.entries(genderAge).forEach(([key, val]) => {
+        const [gender, age] = key.split('.');
+        if (gender === 'F') female += val;
+        else if (gender === 'M') male += val;
+        else unknown += val;
+        ageRanges[age] = (ageRanges[age] || 0) + val;
+      });
+
+      const sortedAges = Object.entries(ageRanges).sort((a, b) => {
+        const numA = parseInt(a[0]);
+        const numB = parseInt(b[0]);
+        return numA - numB;
+      });
+
+      const sortedCountries = Object.entries(countries).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      const sortedCities = Object.entries(cities).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+      container.innerHTML = `
+        <div class="two-col">
+          <div class="glass-card chart-card">
+            <h3>Gender Distribution</h3>
+            <div class="chart-wrap" style="max-width:260px;margin:0 auto;"><canvas id="chart-gender"></canvas></div>
+          </div>
+          <div class="glass-card chart-card">
+            <h3>Age Ranges</h3>
+            <div class="chart-wrap"><canvas id="chart-age"></canvas></div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="glass-card chart-card">
+            <h3>Top Countries</h3>
+            <div class="chart-wrap"><canvas id="chart-countries"></canvas></div>
+          </div>
+          <div class="glass-card chart-card">
+            <h3>Top Cities</h3>
+            <div class="chart-wrap"><canvas id="chart-cities"></canvas></div>
+          </div>
+        </div>
+      `;
+
+      // Gender donut
+      createChart('chart-gender', 'doughnut', {
+        labels: ['Female', 'Male', 'Other'],
+        datasets: [{
+          data: [female, male, unknown],
+          backgroundColor: ['#DD2A7B', '#515BD4', '#8134AF'],
+          borderWidth: 0,
+          cutout: '65%'
+        }]
+      }, { plugins: { legend: { position: 'bottom' } } });
+
+      // Age horizontal bar
+      createChart('chart-age', 'bar', {
+        labels: sortedAges.map(a => a[0]),
+        datasets: [{
+          label: 'Audience',
+          data: sortedAges.map(a => a[1]),
+          backgroundColor: 'rgba(129,52,175,0.6)',
+          borderRadius: 4
+        }]
+      }, { indexAxis: 'y' });
+
+      // Countries horizontal bar
+      createChart('chart-countries', 'bar', {
+        labels: sortedCountries.map(c => c[0]),
+        datasets: [{
+          label: 'Followers',
+          data: sortedCountries.map(c => c[1]),
+          backgroundColor: 'rgba(81,91,212,0.6)',
+          borderRadius: 4
+        }]
+      }, { indexAxis: 'y' });
+
+      // Cities horizontal bar
+      createChart('chart-cities', 'bar', {
+        labels: sortedCities.map(c => c[0]),
+        datasets: [{
+          label: 'Followers',
+          data: sortedCities.map(c => c[1]),
+          backgroundColor: 'rgba(221,42,123,0.5)',
+          borderRadius: 4
+        }]
+      }, { indexAxis: 'y' });
+    }
+
+    // =============== BEST TIMES TAB ===============
+    async function renderBestTimes() {
+      const container = document.getElementById('best-times-content');
+      const posts = await Store.getAllPosts('timestamp', 'desc');
+
+      if (posts.length < 5) {
+        container.innerHTML = '<div class="no-data-msg">Need at least 5 posts to calculate best times. Run a Full Sync.</div>';
+        return;
+      }
+
+      // Bucket by day-of-week x hour
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const grid = {}; // "dayIndex-hour" => { totalRate, count }
+
+      posts.forEach(p => {
+        if (!p.timestamp || p.engagementRate == null) return;
+        const d = new Date(p.timestamp);
+        let dayIdx = d.getDay() - 1; // 0=Mon
+        if (dayIdx < 0) dayIdx = 6; // Sun = 6
+        const hour = d.getHours();
+        const key = `${dayIdx}-${hour}`;
+        if (!grid[key]) grid[key] = { totalRate: 0, count: 0 };
+        grid[key].totalRate += p.engagementRate;
+        grid[key].count++;
+      });
+
+      // Find max average for color scaling
+      let maxAvg = 0;
+      const avgs = {};
+      Object.entries(grid).forEach(([key, val]) => {
+        const avg = val.count >= 1 ? val.totalRate / val.count : 0;
+        avgs[key] = { avg, count: val.count };
+        if (avg > maxAvg && val.count >= 1) maxAvg = avg;
+      });
+
+      // Find top 3 slots (min 3 posts)
+      const ranked = Object.entries(avgs)
+        .filter(([_, v]) => v.count >= 3)
+        .sort((a, b) => b[1].avg - a[1].avg);
+      const top3 = ranked.slice(0, 3);
+
+      // Build HTML heatmap
+      const hours = Array.from({ length: 24 }, (_, i) => i);
+      const hourLabels = hours.map(h => {
+        if (h === 0) return '12a';
+        if (h === 12) return '12p';
+        return h < 12 ? h + 'a' : (h - 12) + 'p';
+      });
+
+      let tableHtml = '<table class="heatmap-table"><thead><tr><th></th>';
+      hourLabels.forEach(l => { tableHtml += `<th>${l}</th>`; });
+      tableHtml += '</tr></thead><tbody>';
+
+      days.forEach((day, di) => {
+        tableHtml += `<tr><th style="text-align:right;padding-right:0.5rem;">${day}</th>`;
+        hours.forEach(h => {
+          const key = `${di}-${h}`;
+          const cell = avgs[key];
+          let bgColor = '#f3f4f6';
+          let title = 'No data';
+
+          if (cell && cell.count >= 1) {
+            const intensity = maxAvg > 0 ? cell.avg / maxAvg : 0;
+            // Cold (purple) to hot (green)
+            if (intensity < 0.25) bgColor = 'rgba(79,70,229,0.15)';
+            else if (intensity < 0.5) bgColor = 'rgba(79,70,229,0.3)';
+            else if (intensity < 0.75) bgColor = 'rgba(34,197,94,0.3)';
+            else bgColor = 'rgba(34,197,94,0.55)';
+            title = `${Utils.formatPercent(cell.avg)} avg (${cell.count} posts)`;
+          }
+
+          const isTop = top3.some(([k]) => k === key);
+          const border = isTop ? 'border:2px solid var(--color-positive);' : '';
+
+          tableHtml += `<td><div class="heatmap-cell" style="background:${bgColor};${border}" title="${title}"></div></td>`;
+        });
+        tableHtml += '</tr>';
+      });
+
+      tableHtml += '</tbody></table>';
+
+      // Format top 3
+      const top3Html = top3.length ? top3.map(([key, val]) => {
+        const [di, h] = key.split('-').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `<div class="best-time-chip">${days[di]} ${h12}${ampm} &bull; ${Utils.formatPercent(val.avg)}</div>`;
+      }).join('') : '<span style="color:var(--text-secondary);font-size:0.8125rem;">Need at least 3 posts per time slot for recommendations.</span>';
+
+      container.innerHTML = `
+        <div class="glass-card chart-card">
+          <h3>Engagement by Time</h3>
+          <div class="heatmap-wrap">${tableHtml}</div>
+          <div class="heatmap-legend">
+            <span>Low</span>
+            <div class="heatmap-legend-block" style="background:rgba(81,91,212,0.2);"></div>
+            <div class="heatmap-legend-block" style="background:rgba(129,52,175,0.35);"></div>
+            <div class="heatmap-legend-block" style="background:rgba(221,42,123,0.45);"></div>
+            <div class="heatmap-legend-block" style="background:rgba(50,215,75,0.55);"></div>
+            <span>High</span>
+          </div>
+        </div>
+
+        <div class="glass-card chart-card">
+          <h3>Recommended Times</h3>
+          <div style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+            Top time slots by average engagement rate (min 3 posts per slot):
+          </div>
+          <div class="best-times-list">${top3Html}</div>
+        </div>
+      `;
+    }
+
+    // =============== CHART HELPER ===============
+    function createChart(canvasId, type, data, extraOpts = {}) {
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+
+      if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
+      }
+
+      const opts = {
+        responsive: true,
+        maintainAspectRatio: type === 'doughnut' ? true : false,
+        plugins: {
+          legend: {
+            display: type === 'doughnut' || (data.datasets && data.datasets.length > 1 && type === 'line')
+          }
+        },
+        ...extraOpts
+      };
+
+      if (type !== 'doughnut') {
+        opts.scales = {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: '#e5e7eb' } },
+          ...(extraOpts.indexAxis === 'y' ? {
+            x: { beginAtZero: true, grid: { color: '#e5e7eb' } },
+            y: { grid: { display: false } }
+          } : {})
+        };
+      }
+
+      chartInstances[canvasId] = new Chart(ctx, { type, data, options: opts });
+    }
+  </script>
+
+</body>
+</html>

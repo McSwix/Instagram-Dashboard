@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Posts — IG Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <style>
+    .posts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 1024px) { .posts-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .posts-grid { grid-template-columns: 1fr; } }
+
+    .post-card { padding: 0; overflow: hidden; }
+    .post-card:hover { transform: translateY(-3px); }
+
+    .post-thumb-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      overflow: hidden;
+      background: var(--bg-input);
+    }
+    .post-thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform var(--transition-base);
+    }
+    .post-card:hover .post-thumb-wrap img { transform: scale(1.05); }
+
+    .post-type-badge {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .post-engagement-badge {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+    }
+
+    .post-body { padding: 0.875rem; }
+
+    .post-caption {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 0.6rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .post-date {
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.75rem;
+    }
+
+    .post-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+    }
+    .post-stat {
+      text-align: center;
+      padding: 0.4rem 0;
+      background: var(--bg-input);
+      border-radius: var(--radius-sm);
+    }
+    .post-stat-value {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .post-stat-label {
+      font-size: 0.5625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+      margin-top: 0.1rem;
+    }
+
+    .post-stats-row2 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin-top: 0.4rem;
+    }
+
+    .posts-empty {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary);
+    }
+    .posts-empty-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+
+    .posts-count {
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <!-- Header -->
+    <div class="section-header animate-in stagger-1" style="margin-bottom:1rem;">
+      <h1 class="section-title">Posts</h1>
+      <span class="posts-count" id="posts-count"></span>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar animate-in stagger-2">
+      <select class="select" id="sort-select">
+        <option value="timestamp">Date (Newest)</option>
+        <option value="timestamp-asc">Date (Oldest)</option>
+        <option value="engagementRate">Engagement Rate</option>
+        <option value="reach">Reach</option>
+        <option value="likes">Likes</option>
+        <option value="comments">Comments</option>
+        <option value="saves">Saves</option>
+      </select>
+      <select class="select" id="type-filter">
+        <option value="all">All Types</option>
+        <option value="IMAGE">Photos</option>
+        <option value="VIDEO">Videos</option>
+        <option value="CAROUSEL_ALBUM">Carousels</option>
+      </select>
+    </div>
+
+    <!-- Grid -->
+    <div id="posts-grid" class="posts-grid animate-in stagger-3">
+      <!-- filled by JS -->
+    </div>
+
+  </div>
+
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    let allPosts = [];
+    let avgEngagementRate = 0;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('posts');
+      PageTransition.init();
+      await PasswordModal.show();
+
+      try {
+        Store.init();
+      } catch (e) {
+        ToastManager.error('Firebase Error', e.message);
+        return;
+      }
+
+      TokenWarning.check();
+
+      // Show skeleton
+      const grid = document.getElementById('posts-grid');
+      grid.innerHTML = Array(6).fill(0).map(() =>
+        `<div class="glass-card-static" style="overflow:hidden;">
+          <div class="skeleton" style="width:100%;aspect-ratio:1;"></div>
+          <div style="padding:0.875rem;">
+            <div class="skeleton skeleton-text lg"></div>
+            <div class="skeleton skeleton-text sm"></div>
+          </div>
+        </div>`
+      ).join('');
+
+      await loadPosts();
+      AutoSync.run();
+
+      document.getElementById('sort-select').addEventListener('change', renderPosts);
+      document.getElementById('type-filter').addEventListener('change', renderPosts);
+    });
+
+    async function loadPosts() {
+      try {
+        allPosts = await Store.getAllPosts('timestamp', 'desc');
+
+        // Calculate avg engagement rate
+        const rates = allPosts.filter(p => p.engagementRate != null && p.engagementRate > 0).map(p => p.engagementRate);
+        avgEngagementRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
+
+        renderPosts();
+      } catch (e) {
+        document.getElementById('posts-grid').innerHTML = `
+          <div class="posts-empty" style="grid-column:1/-1;">
+            <div class="posts-empty-icon">&#128247;</div>
+            <div>Could not load posts. Try again later.</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderPosts() {
+      const grid = document.getElementById('posts-grid');
+      const countEl = document.getElementById('posts-count');
+      const sortBy = document.getElementById('sort-select').value;
+      const typeFilter = document.getElementById('type-filter').value;
+
+      // Filter
+      let posts = typeFilter === 'all'
+        ? [...allPosts]
+        : allPosts.filter(p => p.mediaType === typeFilter);
+
+      // Sort
+      if (sortBy === 'timestamp') {
+        posts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      } else if (sortBy === 'timestamp-asc') {
+        posts.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      } else {
+        posts.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+      }
+
+      countEl.textContent = `${posts.length} post${posts.length !== 1 ? 's' : ''}`;
+
+      if (!posts.length) {
+        grid.innerHTML = `
+          <div class="posts-empty" style="grid-column:1/-1;">
+            <div class="posts-empty-icon">&#128247;</div>
+            <div style="font-size:0.9375rem;font-weight:600;margin-bottom:0.5rem;">No posts found</div>
+            <div style="font-size:0.8125rem;">
+              ${allPosts.length === 0
+                ? 'Run a <a href="settings.html" style="color:var(--accent);text-decoration:underline;">Full Sync</a> to import your posts.'
+                : 'No posts match this filter.'}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = posts.map(post => {
+        const rate = post.engagementRate;
+        const rateClass = rate != null
+          ? (rate > avgEngagementRate * 1.2 ? 'engagement-high'
+            : rate < avgEngagementRate * 0.8 ? 'engagement-low'
+            : 'engagement-avg')
+          : '';
+
+        const rateBg = rate != null
+          ? (rate > avgEngagementRate * 1.2 ? 'background:#dcfce7;color:#16a34a;'
+            : rate < avgEngagementRate * 0.8 ? 'background:#fee2e2;color:#dc2626;'
+            : 'background:#fef3c7;color:#d97706;')
+          : 'background:var(--bg-input);color:var(--text-tertiary);';
+
+        const typeLabel = post.mediaType === 'CAROUSEL_ALBUM' ? 'Carousel'
+          : post.mediaType === 'VIDEO' ? 'Video'
+          : 'Photo';
+
+        const typeIcon = post.mediaType === 'CAROUSEL_ALBUM' ? '&#x1F4F0;'
+          : post.mediaType === 'VIDEO' ? '&#x1F3AC;'
+          : '&#x1F4F7;';
+
+        return `
+          <a href="${post.permalink || '#'}" target="_blank" rel="noopener" class="glass-card post-card">
+            <div class="post-thumb-wrap">
+              <img
+                src="${post.thumbnailUrl || post.mediaUrl || ''}"
+                alt=""
+                loading="lazy"
+                onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:2rem;color:var(--text-tertiary);\\'>&#128247;</div>'"
+              />
+              <span class="post-type-badge">${typeIcon} ${typeLabel}</span>
+              ${rate != null ? `<span class="post-engagement-badge" style="${rateBg}">${Utils.formatPercent(rate)}</span>` : ''}
+            </div>
+            <div class="post-body">
+              <div class="post-caption">${post.caption ? Utils.escapeHtml(post.caption) : '<em style="color:var(--text-tertiary)">No caption</em>'}</div>
+              <div class="post-date">${Utils.formatDate(post.timestamp)}</div>
+              <div class="post-stats">
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.reach || 0)}</div>
+                  <div class="post-stat-label">Reach</div>
+                </div>
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.impressions || 0)}</div>
+                  <div class="post-stat-label">Impress.</div>
+                </div>
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.likes || 0)}</div>
+                  <div class="post-stat-label">Likes</div>
+                </div>
+              </div>
+              <div class="post-stats-row2">
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.comments || 0)}</div>
+                  <div class="post-stat-label">Comments</div>
+                </div>
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.saves || 0)}</div>
+                  <div class="post-stat-label">Saves</div>
+                </div>
+                <div class="post-stat">
+                  <div class="post-stat-value">${Utils.formatNumber(post.shares || 0)}</div>
+                  <div class="post-stat-label">Shares</div>
+                </div>
+              </div>
+            </div>
+          </a>
+        `;
+      }).join('');
+    }
+  </script>
+
+</body>
+</html>

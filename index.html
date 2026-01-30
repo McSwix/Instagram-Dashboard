@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Instagram Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    /* =============================================
+       DASHBOARD — Refined Editorial Analytics
+       ============================================= */
+
+    /* Override fonts for this page with more distinctive choices */
+    #page {
+      --font-body-local: 'DM Sans', var(--font-body);
+      --font-display-local: 'Plus Jakarta Sans', var(--font-display);
+      font-family: var(--font-body-local);
+    }
+    #page h1, #page h2, #page h3,
+    #page .section-title,
+    #page .metric-value,
+    #page .perf-value,
+    #page .time-highlight,
+    #page .top-post-rank,
+    #page .top-post-eng-value,
+    #page .content-type-value {
+      font-family: var(--font-display-local);
+    }
+
+    /* Subtle grain texture overlay on the page */
+    .page-wrap::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.3;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    }
+
+    /* Page-level ambient glow */
+    .page-content {
+      position: relative;
+      z-index: 1;
+    }
+    .page-content::before {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -120px;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(79, 70, 229, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .page-content::after {
+      content: '';
+      position: absolute;
+      top: 300px;
+      left: -160px;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(236, 72, 153, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* ---- Section Headers ---- */
+    #page .section-header {
+      margin-bottom: 1.125rem;
+    }
+    #page .section-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+    #page .section-link {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: var(--accent);
+      transition: color 0.2s, gap 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    #page .section-link:hover {
+      color: #3730a3;
+      gap: 0.4rem;
+    }
+
+    /* ---- 7-Day Performance Grid ---- */
+    .perf-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.625rem;
+    }
+    .perf-card {
+      padding: 1.125rem 0.75rem 1rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    /* Decorative top accent line on each perf card */
+    .perf-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      border-radius: 0 0 2px 2px;
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .perf-card:hover::before { opacity: 1; }
+    .perf-card:nth-child(1)::before { background: #ef4444; }
+    .perf-card:nth-child(2)::before { background: #3b82f6; }
+    .perf-card:nth-child(3)::before { background: #8b5cf6; }
+    .perf-card:nth-child(4)::before { background: #f59e0b; }
+    .perf-card:nth-child(5)::before { background: #10b981; }
+    .perf-card:nth-child(6)::before { background: #6366f1; }
+
+    .perf-card-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.5rem;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .perf-card-icon.likes { background: linear-gradient(135deg, #ef4444, #f87171); }
+    .perf-card-icon.comments { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+    .perf-card-icon.saves { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+    .perf-card-icon.shares { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .perf-card-icon.reach { background: linear-gradient(135deg, #10b981, #34d399); }
+    .perf-card-icon.impressions { background: linear-gradient(135deg, #6366f1, #818cf8); }
+
+    .perf-value {
+      font-size: 1.375rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .perf-label {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      margin-top: 0.1rem;
+      margin-bottom: 0.4rem;
+    }
+    .perf-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 99px;
+    }
+    .perf-change.positive { background: #dcfce7; color: #15803d; }
+    .perf-change.negative { background: #fee2e2; color: #dc2626; }
+    .perf-change.neutral { background: var(--bg-input); color: var(--text-tertiary); }
+
+    /* ---- Two-column Insights Row ---- */
+    .dash-two-col {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ---- Sparkline Card ---- */
+    .sparkline-card {
+      padding: 1.25rem 1.5rem;
+      position: relative;
+    }
+    .sparkline-card canvas {
+      width: 100% !important;
+      height: 130px !important;
+    }
+    .sparkline-card .insight-card-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .sparkline-card .insight-card-label::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(79, 70, 229, 0.4);
+    }
+
+    /* ---- Content Type Breakdown ---- */
+    #content-type-section {
+      display: flex;
+      flex-direction: column;
+    }
+    #content-type-section > .insight-card-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    #content-type-section > .insight-card-label::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ig-pink);
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(221, 42, 123, 0.35);
+    }
+
+    .content-type-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      flex: 1;
+    }
+    .content-type-card {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      padding: 0.875rem 1rem;
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      text-align: left;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .content-type-card:hover {
+      border-color: var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+    .content-type-icon {
+      font-size: 1.375rem;
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-input);
+      border-radius: 10px;
+    }
+    .content-type-info { flex: 1; }
+    .content-type-value {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .content-type-label {
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .content-type-sub {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.1rem;
+    }
+
+    /* ---- Top Posts List ---- */
+    .top-posts-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .top-post-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      text-decoration: none;
+      transition: background 0.2s;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .top-post-item:last-child { border-bottom: none; }
+    .top-post-item:hover { background: rgba(79, 70, 229, 0.02); }
+
+    .top-post-rank {
+      font-size: 0.8125rem;
+      font-weight: 800;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #fff;
+    }
+    .top-post-rank.gold { background: linear-gradient(135deg, #f59e0b, #fbbf24); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); }
+    .top-post-rank.silver { background: linear-gradient(135deg, #94a3b8, #cbd5e1); box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3); }
+    .top-post-rank.bronze { background: linear-gradient(135deg, #d97706, #fbbf24); box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25); }
+
+    .top-post-thumb {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--bg-input);
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .top-post-info { flex: 1; min-width: 0; }
+    .top-post-caption {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .top-post-meta {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-top: 0.2rem;
+      display: flex;
+      gap: 0.625rem;
+    }
+    .top-post-meta span {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .top-post-eng {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .top-post-eng-value {
+      font-size: 1.125rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+    .top-post-eng-label {
+      font-size: 0.5625rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+
+    /* ---- Quick Insights ---- */
+    .quick-insights-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .insight-card {
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    /* Decorative corner accent */
+    .insight-card::after {
+      content: '';
+      position: absolute;
+      top: -20px;
+      right: -20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(79, 70, 229, 0.03);
+      pointer-events: none;
+    }
+    .insight-card-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+      margin-bottom: 0.75rem;
+    }
+    .time-highlight {
+      font-family: var(--font-display-local);
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .audience-line {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-weight: 400;
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 1024px) {
+      .perf-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .perf-grid { grid-template-columns: repeat(2, 1fr); }
+      .dash-two-col { grid-template-columns: 1fr; }
+      .quick-insights-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .perf-grid { grid-template-columns: 1fr 1fr; }
+      .perf-value { font-size: 1.125rem; }
+      .perf-label { font-size: 0.6875rem; }
+      .perf-card { padding: 0.875rem 0.5rem 0.75rem; }
+      .top-post-item { padding: 0.75rem; gap: 0.625rem; }
+      .top-post-thumb { width: 44px; height: 44px; }
+      .top-post-eng-value { font-size: 0.9375rem; }
+      .top-post-meta { flex-wrap: wrap; gap: 0.375rem; }
+      .sparkline-card { padding: 1rem; }
+      .content-type-card { gap: 0.625rem; padding: 0.75rem; }
+      .insight-card { padding: 1.125rem; }
+      .time-highlight { font-size: 1.25rem; }
+      .audience-line { font-size: 0.8125rem; }
+    }
+
+    /* ---- Info Tooltip ---- */
+    .metric-card { position: relative; overflow: visible !important; }
+    .metric-card.glass-card { overflow: visible !important; }
+    .metric-info-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: help;
+      color: var(--text-tertiary);
+      font-size: 0.625rem;
+      font-weight: 700;
+      font-family: var(--font-body-local);
+      line-height: 1;
+      transition: background 0.2s, color 0.2s;
+      z-index: 2;
+    }
+    .metric-info-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .metric-info-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      right: 0;
+      width: 230px;
+      max-width: calc(100vw - 3rem);
+      padding: 0.75rem 0.875rem;
+      background: var(--bg-sidebar);
+      color: rgba(255,255,255,0.9);
+      font-size: 0.75rem;
+      line-height: 1.5;
+      font-weight: 400;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(4px);
+      transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+      z-index: 60;
+      pointer-events: none;
+      text-align: left;
+    }
+    .metric-info-tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      right: 12px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--bg-sidebar);
+    }
+    .metric-info-btn:hover + .metric-info-tooltip,
+    .metric-info-tooltip:hover {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    /* Tap support for touch devices */
+    @media (hover: none) {
+      .metric-info-btn:active + .metric-info-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+    }
+
+    /* ---- Entrance animation additions ---- */
+    .stagger-7 { animation-delay: 0.35s; }
+    .stagger-8 { animation-delay: 0.4s; }
+  </style>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <!-- Sync Status Bar -->
+    <div class="sync-bar animate-in stagger-1" id="sync-bar">
+      <div class="sync-status">
+        <div class="sync-dot" id="sync-dot"></div>
+        <span id="sync-text">Checking...</span>
+      </div>
+      <button class="sync-btn" id="sync-refresh-btn">
+        &#8635; Refresh
+      </button>
+    </div>
+
+    <!-- Key Metrics -->
+    <div id="metrics-area">
+      <!-- skeleton injected by JS -->
+    </div>
+
+    <!-- 7-Day Performance Stats -->
+    <section class="animate-in stagger-3" style="margin-bottom:1.5rem;" id="perf-section">
+      <div class="section-header">
+        <h2 class="section-title">Last 7 Days</h2>
+        <span id="perf-period" style="font-size:0.75rem;color:var(--text-tertiary);font-weight:500;"></span>
+      </div>
+      <div id="perf-stats">
+        <!-- skeleton or content -->
+      </div>
+    </section>
+
+    <!-- Growth Sparkline + Content Type Breakdown -->
+    <div class="dash-two-col animate-in stagger-4">
+      <div class="glass-card sparkline-card" id="sparkline-section">
+        <div class="insight-card-label">Follower Trend &mdash; Last 30 Days</div>
+        <canvas id="sparkline-canvas"></canvas>
+        <div id="sparkline-summary" style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.75rem;font-weight:500;"></div>
+      </div>
+      <div id="content-type-section">
+        <div class="insight-card-label">Content Performance</div>
+        <div id="content-type-breakdown">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Top 3 Posts This Month -->
+    <section class="animate-in stagger-5" style="margin-bottom:1.5rem;" id="top-posts-section">
+      <div class="section-header">
+        <h2 class="section-title">Top Posts This Month</h2>
+        <a href="posts.html" class="section-link">View all &rarr;</a>
+      </div>
+      <div class="glass-card" id="top-posts" style="overflow:hidden;">
+        <!-- filled by JS -->
+      </div>
+    </section>
+
+    <!-- Quick Insights (Best Time + Audience) -->
+    <section class="animate-in stagger-6" style="margin-bottom:1.5rem;" id="insights-section">
+      <div class="section-header">
+        <h2 class="section-title">Quick Insights</h2>
+      </div>
+      <div id="quick-insights">
+        <!-- filled by JS -->
+      </div>
+    </section>
+
+    <!-- Follower Analysis (compact summary linking to full page) -->
+    <section class="animate-in stagger-7" style="margin-bottom:1.5rem;display:none;" id="follower-section">
+      <div class="section-header">
+        <h2 class="section-title">Follower Analysis</h2>
+        <a href="followers.html" class="section-link">View full analysis &rarr;</a>
+      </div>
+      <div id="follower-analysis"></div>
+    </section>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('dashboard');
+      PageTransition.init();
+
+      await PasswordModal.show();
+
+      try {
+        Store.init();
+      } catch (e) {
+        ToastManager.error('Firebase Error', e.message);
+        return;
+      }
+
+      TokenWarning.check();
+
+      // Show skeletons
+      document.getElementById('metrics-area').innerHTML = Skeleton.metricCards();
+      document.getElementById('perf-stats').innerHTML = Skeleton.card(6);
+      document.getElementById('top-posts').innerHTML = `<div style="padding:1.5rem;">${Skeleton.card(3)}</div>`;
+
+      // Load all sections
+      await Promise.all([
+        loadMetrics(),
+        loadPerfStats(),
+        loadSparkline(),
+        loadContentTypeBreakdown(),
+        loadTopPosts(),
+        loadQuickInsights(),
+        loadFollowerAnalysis()
+      ]);
+
+      // Auto quick-sync if stale
+      const synced = await AutoSync.run();
+      if (synced) {
+        await Promise.all([
+          loadMetrics(),
+          loadPerfStats(),
+          loadSparkline(),
+          loadContentTypeBreakdown(),
+          loadTopPosts(),
+          loadQuickInsights()
+        ]);
+      }
+
+      AnimatedCounter.observeAll();
+    });
+
+    // ---- Sync Bar ----
+    async function loadSyncBar() {
+      const config = await Store.getConfig();
+      const dot = document.getElementById('sync-dot');
+      const text = document.getElementById('sync-text');
+
+      if (!config?.lastSyncAt) {
+        dot.className = 'sync-dot stale';
+        text.textContent = 'Never synced';
+        return;
+      }
+
+      const hoursSince = (Date.now() - new Date(config.lastSyncAt).getTime()) / (1000 * 60 * 60);
+      if (config.lastSyncStatus === 'error') {
+        dot.className = 'sync-dot error';
+        text.textContent = `Last sync failed \u2022 ${Utils.timeAgo(config.lastSyncAt)}`;
+      } else if (hoursSince > 12) {
+        dot.className = 'sync-dot stale';
+        text.textContent = `Last sync: ${Utils.timeAgo(config.lastSyncAt)}`;
+      } else {
+        dot.className = 'sync-dot';
+        text.textContent = `Last sync: ${Utils.timeAgo(config.lastSyncAt)}`;
+      }
+    }
+
+    document.getElementById('sync-refresh-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('sync-refresh-btn');
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+      try {
+        await InstagramAPI.quickSync();
+        ToastManager.success('Synced', 'Dashboard refreshed.');
+        await Promise.all([
+          loadMetrics(),
+          loadPerfStats(),
+          loadSparkline(),
+          loadContentTypeBreakdown(),
+          loadTopPosts(),
+          loadQuickInsights()
+        ]);
+        loadSyncBar();
+      } catch (e) {
+        ToastManager.error('Sync Failed', e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '&#8635; Refresh';
+      }
+    });
+
+    // ---- Key Metrics (Followers, Following, Engagement Rate, Reach) ----
+    async function loadMetrics() {
+      const area = document.getElementById('metrics-area');
+
+      try {
+        const latest = await Store.getLatestAccountInsight();
+        const config = await Store.getConfig();
+        const syncs = await Store.getRecentSyncs(10);
+        const apiSyncs = syncs.filter(s => s.type === 'api' && s.status === 'success');
+
+        const currentFollowers = latest?.followerCount || config?.igFollowerCount || 0;
+        const currentFollowing = latest?.followingCount || config?.igFollowingCount || 0;
+
+        let prevFollowers = null;
+        let prevFollowing = null;
+        if (apiSyncs.length >= 2) {
+          prevFollowers = apiSyncs[1].followerCount;
+          prevFollowing = apiSyncs[1].followingCount;
+        }
+
+        const followerDelta = prevFollowers != null ? currentFollowers - prevFollowers : null;
+        const followingDelta = prevFollowing != null ? currentFollowing - prevFollowing : null;
+
+        const posts = await Store.getTopPosts('timestamp', 20);
+        let avgEngagement = 0;
+        if (posts.length) {
+          const rates = posts.filter(p => p.engagementRate != null).map(p => p.engagementRate);
+          if (rates.length) avgEngagement = rates.reduce((a, b) => a + b, 0) / rates.length;
+        }
+
+        const now = new Date();
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        let totalReach = 0;
+        try {
+          const insights = await Store.getAccountInsightRange(
+            weekAgo.toISOString().split('T')[0],
+            now.toISOString().split('T')[0]
+          );
+          totalReach = insights.reduce((sum, d) => sum + (d.reach || 0), 0);
+        } catch (e) { /* no data yet */ }
+
+        area.innerHTML = `
+          <div class="metric-grid animate-in stagger-2">
+            <div class="glass-card metric-card">
+              <div class="metric-icon purple">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>
+              </div>
+              <div class="metric-label">Followers</div>
+              <div class="metric-value" data-counter="${currentFollowers}">0</div>
+              ${followerDelta != null ? `
+                <div class="metric-change ${followerDelta >= 0 ? 'positive' : 'negative'}">
+                  ${followerDelta >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(followerDelta)}
+                </div>
+              ` : ''}
+            </div>
+            <div class="glass-card metric-card">
+              <div class="metric-icon blue">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+              </div>
+              <div class="metric-label">Following</div>
+              <div class="metric-value" data-counter="${currentFollowing}">0</div>
+              ${followingDelta != null ? `
+                <div class="metric-change ${followingDelta >= 0 ? 'positive' : 'negative'}">
+                  ${followingDelta >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(followingDelta)}
+                </div>
+              ` : ''}
+            </div>
+            <div class="glass-card metric-card">
+              <div class="metric-info-btn">i</div>
+              <div class="metric-info-tooltip">
+                <strong style="color:#fff;font-weight:600;">Engagement Rate</strong><br/>
+                Calculated as total engagements (likes + comments + saves + shares) divided by reach, averaged across your last ${posts.length} posts.
+              </div>
+              <div class="metric-icon green">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/></svg>
+              </div>
+              <div class="metric-label">Engagement Rate</div>
+              <div class="metric-value">${Utils.formatPercent(avgEngagement)}</div>
+              <div style="font-size:0.7rem;color:var(--text-tertiary);margin-top:0.25rem;font-weight:500;">Avg last ${posts.length} posts</div>
+            </div>
+            <div class="glass-card metric-card">
+              <div class="metric-icon orange">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+              </div>
+              <div class="metric-label">Total Reach</div>
+              <div class="metric-value" data-counter="${totalReach}">0</div>
+              <div style="font-size:0.7rem;color:var(--text-tertiary);margin-top:0.25rem;font-weight:500;">Last 7 days</div>
+            </div>
+          </div>
+        `;
+
+        AnimatedCounter.observeAll();
+        loadSyncBar();
+
+      } catch (e) {
+        area.innerHTML = `
+          <div class="glass-card-static" style="padding:2rem;text-align:center;margin-bottom:1.5rem;">
+            <div style="font-size:1.25rem;margin-bottom:0.5rem;">&#128203;</div>
+            <div style="color:var(--text-secondary);font-size:0.875rem;">No data yet. Go to <a href="settings.html" style="color:var(--accent);text-decoration:underline;">Settings</a> to connect your Instagram account and run a sync.</div>
+          </div>
+        `;
+      }
+    }
+
+    // ---- 7-Day Performance Stats ----
+    async function loadPerfStats() {
+      const container = document.getElementById('perf-stats');
+      const periodLabel = document.getElementById('perf-period');
+
+      try {
+        const posts = await Store.getAllPosts('timestamp', 'desc');
+        const now = new Date();
+        const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+        const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+        const thisWeek = posts.filter(p => new Date(p.timestamp) >= weekAgo);
+        const lastWeek = posts.filter(p => {
+          const d = new Date(p.timestamp);
+          return d >= twoWeeksAgo && d < weekAgo;
+        });
+
+        // Also get account-level reach/impressions from account_insights
+        let thisWeekReach = 0, lastWeekReach = 0;
+        let thisWeekImpressions = 0, lastWeekImpressions = 0;
+        try {
+          const thisInsights = await Store.getAccountInsightRange(
+            weekAgo.toISOString().split('T')[0],
+            now.toISOString().split('T')[0]
+          );
+          thisWeekReach = thisInsights.reduce((s, d) => s + (d.reach || 0), 0);
+          thisWeekImpressions = thisInsights.reduce((s, d) => s + (d.impressions || 0), 0);
+
+          const lastInsights = await Store.getAccountInsightRange(
+            twoWeeksAgo.toISOString().split('T')[0],
+            weekAgo.toISOString().split('T')[0]
+          );
+          lastWeekReach = lastInsights.reduce((s, d) => s + (d.reach || 0), 0);
+          lastWeekImpressions = lastInsights.reduce((s, d) => s + (d.impressions || 0), 0);
+        } catch (e) { /* no insight data */ }
+
+        function sum(arr, field) { return arr.reduce((s, p) => s + (p[field] || 0), 0); }
+
+        const stats = [
+          {
+            label: 'Likes', icon: 'likes',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/></svg>',
+            current: sum(thisWeek, 'likes'), previous: sum(lastWeek, 'likes')
+          },
+          {
+            label: 'Comments', icon: 'comments',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>',
+            current: sum(thisWeek, 'comments'), previous: sum(lastWeek, 'comments')
+          },
+          {
+            label: 'Saves', icon: 'saves',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>',
+            current: sum(thisWeek, 'saves'), previous: sum(lastWeek, 'saves')
+          },
+          {
+            label: 'Shares', icon: 'shares',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>',
+            current: sum(thisWeek, 'shares'), previous: sum(lastWeek, 'shares')
+          },
+          {
+            label: 'Reach', icon: 'reach',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>',
+            current: thisWeekReach, previous: lastWeekReach
+          },
+          {
+            label: 'Impressions', icon: 'impressions',
+            svg: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l3-3z" clip-rule="evenodd"/></svg>',
+            current: thisWeekImpressions, previous: lastWeekImpressions
+          }
+        ];
+
+        periodLabel.textContent = `vs previous 7 days`;
+
+        container.innerHTML = `
+          <div class="perf-grid">
+            ${stats.map(s => {
+              const diff = s.current - s.previous;
+              const pct = s.previous > 0 ? Math.round((diff / s.previous) * 100) : (s.current > 0 ? 100 : 0);
+              const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+              const arrow = diff > 0 ? '&#9650;' : diff < 0 ? '&#9660;' : '—';
+              return `
+                <div class="glass-card perf-card">
+                  <div class="perf-card-icon ${s.icon}">${s.svg}</div>
+                  <div class="perf-value" data-counter="${s.current}">0</div>
+                  <div class="perf-label">${s.label}</div>
+                  <div class="perf-change ${cls}">
+                    ${arrow} ${Math.abs(pct)}%
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+
+        AnimatedCounter.observeAll();
+
+      } catch (e) {
+        container.innerHTML = `
+          <div class="glass-card-static" style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem;">
+            No performance data yet. Run a Full Sync to see weekly stats.
+          </div>
+        `;
+      }
+    }
+
+    // ---- Growth Sparkline (30-day follower trend) ----
+    async function loadSparkline() {
+      const canvas = document.getElementById('sparkline-canvas');
+      const summary = document.getElementById('sparkline-summary');
+
+      try {
+        const now = new Date();
+        const monthAgo = new Date(now);
+        monthAgo.setDate(monthAgo.getDate() - 30);
+
+        const insights = await Store.getAccountInsightRange(
+          monthAgo.toISOString().split('T')[0],
+          now.toISOString().split('T')[0]
+        );
+
+        if (!insights.length || !insights.some(d => d.followerCount)) {
+          canvas.style.display = 'none';
+          summary.textContent = 'No follower data yet. Run syncs to start tracking growth.';
+          return;
+        }
+
+        const dataPoints = insights.filter(d => d.followerCount).sort((a, b) => a.date.localeCompare(b.date));
+        const labels = dataPoints.map(d => {
+          const dt = new Date(d.date + 'T00:00:00');
+          return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        });
+        const values = dataPoints.map(d => d.followerCount);
+
+        const first = values[0];
+        const last = values[values.length - 1];
+        const diff = last - first;
+
+        summary.innerHTML = `${diff >= 0 ? '<span style="color:var(--color-positive);">&#9650;</span>' : '<span style="color:var(--color-negative);">&#9660;</span>'} <strong>${diff >= 0 ? '+' : ''}${diff}</strong> followers over 30 days`;
+
+        // Create gradient
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 130);
+        gradient.addColorStop(0, 'rgba(79, 70, 229, 0.12)');
+        gradient.addColorStop(1, 'rgba(79, 70, 229, 0.0)');
+
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              data: values,
+              borderColor: '#4f46e5',
+              backgroundColor: gradient,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#4f46e5',
+              pointHoverBorderColor: '#fff',
+              pointHoverBorderWidth: 2,
+              borderWidth: 2.5
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: '#1a1d29',
+                titleFont: { family: "'DM Sans', sans-serif", size: 11, weight: '600' },
+                bodyFont: { family: "'DM Sans', sans-serif", size: 13, weight: '700' },
+                padding: { x: 12, y: 8 },
+                cornerRadius: 8,
+                displayColors: false
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                grid: { display: false },
+                ticks: { font: { family: "'DM Sans', sans-serif", size: 10, weight: '500' }, color: '#9ca3af', maxTicksLimit: 6 },
+                border: { display: false }
+              },
+              y: {
+                display: true,
+                grid: { color: 'rgba(0,0,0,0.03)', drawBorder: false },
+                ticks: { font: { family: "'DM Sans', sans-serif", size: 10, weight: '500' }, color: '#9ca3af', maxTicksLimit: 4 },
+                border: { display: false }
+              }
+            },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
+          }
+        });
+      } catch (e) {
+        canvas.style.display = 'none';
+        summary.textContent = 'Could not load follower trend.';
+      }
+    }
+
+    // ---- Content Type Breakdown ----
+    async function loadContentTypeBreakdown() {
+      const container = document.getElementById('content-type-breakdown');
+
+      try {
+        const posts = await Store.getAllPosts('timestamp', 'desc');
+        if (!posts.length) {
+          container.innerHTML = `<div style="font-size:0.8125rem;color:var(--text-secondary);padding:1rem 0;">No posts yet.</div>`;
+          return;
+        }
+
+        const types = { IMAGE: { label: 'Photos', icon: '&#128247;', posts: [] }, VIDEO: { label: 'Reels / Video', icon: '&#127910;', posts: [] }, CAROUSEL_ALBUM: { label: 'Carousels', icon: '&#128218;', posts: [] } };
+
+        posts.forEach(p => {
+          const t = p.mediaType || 'IMAGE';
+          if (types[t]) types[t].posts.push(p);
+          else types['IMAGE'].posts.push(p);
+        });
+
+        container.innerHTML = `
+          <div class="content-type-grid">
+            ${Object.values(types).map(t => {
+              const count = t.posts.length;
+              if (count === 0) return `
+                <div class="content-type-card">
+                  <div class="content-type-icon">${t.icon}</div>
+                  <div class="content-type-info">
+                    <div class="content-type-label">${t.label}</div>
+                    <div class="content-type-sub">No posts</div>
+                  </div>
+                </div>
+              `;
+              const avgRate = t.posts.filter(p => p.engagementRate != null).reduce((s, p) => s + p.engagementRate, 0) / (t.posts.filter(p => p.engagementRate != null).length || 1);
+              const avgReach = Math.round(t.posts.reduce((s, p) => s + (p.reach || 0), 0) / count);
+              return `
+                <div class="content-type-card">
+                  <div class="content-type-icon">${t.icon}</div>
+                  <div class="content-type-info">
+                    <div class="content-type-label">${t.label}</div>
+                    <div class="content-type-value">${Utils.formatPercent(avgRate)}</div>
+                    <div class="content-type-sub">${count} posts &middot; ${Utils.formatNumber(avgReach)} avg reach</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } catch (e) {
+        container.innerHTML = `<div style="font-size:0.8125rem;color:var(--text-secondary);">Could not load content breakdown.</div>`;
+      }
+    }
+
+    // ---- Top 3 Posts This Month ----
+    async function loadTopPosts() {
+      const container = document.getElementById('top-posts');
+
+      try {
+        const posts = await Store.getAllPosts('timestamp', 'desc');
+        const now = new Date();
+        const monthAgo = new Date(now);
+        monthAgo.setDate(monthAgo.getDate() - 30);
+
+        const monthPosts = posts.filter(p => new Date(p.timestamp) >= monthAgo);
+        const sorted = monthPosts.sort((a, b) => (b.engagement || 0) - (a.engagement || 0));
+        const top3 = sorted.slice(0, 3);
+
+        if (!top3.length) {
+          container.innerHTML = `
+            <div style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem;">
+              No posts this month. Run a Full Sync from <a href="settings.html" style="color:var(--accent);text-decoration:underline;">Settings</a>.
+            </div>
+          `;
+          return;
+        }
+
+        const rankClasses = ['gold', 'silver', 'bronze'];
+
+        container.innerHTML = `
+          <div class="top-posts-list">
+            ${top3.map((post, i) => `
+              <a href="${post.permalink || '#'}" target="_blank" rel="noopener" class="top-post-item">
+                <div class="top-post-rank ${rankClasses[i]}">${i + 1}</div>
+                <img
+                  src="${post.thumbnailUrl || post.mediaUrl || ''}"
+                  alt=""
+                  class="top-post-thumb"
+                  loading="lazy"
+                  onerror="this.style.background='var(--bg-input)';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22/>';"
+                />
+                <div class="top-post-info">
+                  <div class="top-post-caption">${Utils.escapeHtml(Utils.truncate(post.caption, 60)) || 'No caption'}</div>
+                  <div class="top-post-meta">
+                    <span>&#10084; ${Utils.formatNumber(post.likes || 0)}</span>
+                    <span>&#128172; ${Utils.formatNumber(post.comments || 0)}</span>
+                    <span>&#128278; ${Utils.formatNumber(post.saves || 0)}</span>
+                    ${post.reach ? `<span>&#128065; ${Utils.formatNumber(post.reach)}</span>` : ''}
+                  </div>
+                </div>
+                <div class="top-post-eng">
+                  <div class="top-post-eng-value">${Utils.formatNumber(post.engagement || 0)}</div>
+                  <div class="top-post-eng-label">Engagements</div>
+                </div>
+              </a>
+            `).join('')}
+          </div>
+        `;
+      } catch (e) {
+        container.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem;">Could not load top posts.</div>`;
+      }
+    }
+
+    // ---- Quick Insights (Best Time + Audience) ----
+    async function loadQuickInsights() {
+      const container = document.getElementById('quick-insights');
+
+      try {
+        const posts = await Store.getAllPosts('timestamp', 'desc');
+
+        let bestTimeText = 'Not enough data';
+        if (posts.length >= 5) {
+          const buckets = {};
+          posts.forEach(p => {
+            if (!p.timestamp) return;
+            const d = new Date(p.timestamp);
+            const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+            const hour = d.getHours();
+            const key = `${day} ${hour}`;
+            if (!buckets[key]) buckets[key] = { total: 0, count: 0, day, hour };
+            buckets[key].total += (p.engagement || p.engagementRate || 0);
+            buckets[key].count++;
+          });
+
+          const sorted = Object.values(buckets)
+            .filter(b => b.count >= 1)
+            .sort((a, b) => (b.total / b.count) - (a.total / a.count));
+
+          if (sorted.length) {
+            const best = sorted[0];
+            const h = best.hour;
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            bestTimeText = `${best.day}s at ${h12}${ampm}`;
+          }
+        }
+
+        const latestInsight = await Store.getLatestAccountInsight();
+        let audienceText = 'Run a full sync to get audience data';
+        if (latestInsight?.audienceGenderAge && Object.keys(latestInsight.audienceGenderAge).length) {
+          const genderAge = latestInsight.audienceGenderAge;
+          let female = 0, male = 0, total = 0;
+          let topAgeRange = '';
+          let topAgeCount = 0;
+
+          Object.entries(genderAge).forEach(([key, val]) => {
+            total += val;
+            if (key.startsWith('F.')) female += val;
+            if (key.startsWith('M.')) male += val;
+            const ageRange = key.split('.')[1];
+            if (val > topAgeCount) {
+              topAgeCount = val;
+              topAgeRange = ageRange;
+            }
+          });
+
+          const femalePct = total ? Math.round((female / total) * 100) : 0;
+          const malePct = total ? Math.round((male / total) * 100) : 0;
+
+          let topCountry = '';
+          if (latestInsight.audienceCountry) {
+            const sorted = Object.entries(latestInsight.audienceCountry).sort((a, b) => b[1] - a[1]);
+            if (sorted.length) topCountry = sorted[0][0];
+          }
+
+          audienceText = `${femalePct}% female, ${malePct}% male`;
+          if (topAgeRange) audienceText += `, mostly ${topAgeRange}`;
+          if (topCountry) audienceText += `, primarily ${topCountry}`;
+        }
+
+        container.innerHTML = `
+          <div class="quick-insights-row">
+            <div class="glass-card insight-card">
+              <div class="insight-card-label">Best Time to Post</div>
+              <div class="time-highlight">${bestTimeText}</div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;font-weight:500;">
+                Based on ${posts.length} posts analysed
+              </div>
+            </div>
+            <div class="glass-card insight-card">
+              <div class="insight-card-label">Audience Summary</div>
+              <div class="audience-line">${audienceText}</div>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        container.innerHTML = `<div class="quick-insights-row">${Skeleton.card(2)}</div>`;
+      }
+    }
+
+    // ---- Follower Analysis (Compact Summary) ----
+    async function loadFollowerAnalysis() {
+      const section = document.getElementById('follower-section');
+      const grid = document.getElementById('follower-analysis');
+
+      try {
+        const snapshots = await Store.getLatestSnapshots(1);
+        if (!snapshots.length) return;
+
+        section.style.display = 'block';
+        const latest = snapshots[0];
+
+        const followers = latest.followers || [];
+        const following = latest.following || [];
+
+        const followersSet = new Set(followers);
+        const followingSet = new Set(following);
+        const notFollowingBack = following.filter(u => !followersSet.has(u));
+        const fans = followers.filter(u => !followingSet.has(u));
+        const mutuals = followers.filter(u => followingSet.has(u));
+        const followBackRate = following.length > 0 ? Math.round((mutuals.length / following.length) * 100) : 0;
+
+        grid.innerHTML = `
+          <a href="followers.html" class="glass-card" style="padding:1.25rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;text-decoration:none;">
+            <div style="display:flex;gap:1.5rem;flex:1;flex-wrap:wrap;">
+              <div style="text-align:center;min-width:60px;">
+                <div style="font-family:var(--font-display-local);font-size:1.5rem;font-weight:800;color:var(--color-negative);letter-spacing:-0.02em;">${notFollowingBack.length}</div>
+                <div style="font-size:0.625rem;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Not Following Back</div>
+              </div>
+              <div style="text-align:center;min-width:60px;">
+                <div style="font-family:var(--font-display-local);font-size:1.5rem;font-weight:800;color:var(--color-positive);letter-spacing:-0.02em;">${fans.length}</div>
+                <div style="font-size:0.625rem;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Fans</div>
+              </div>
+              <div style="text-align:center;min-width:60px;">
+                <div style="font-family:var(--font-display-local);font-size:1.5rem;font-weight:800;color:var(--color-info);letter-spacing:-0.02em;">${mutuals.length}</div>
+                <div style="font-size:0.625rem;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Mutuals</div>
+              </div>
+              <div style="text-align:center;min-width:60px;">
+                <div style="font-family:var(--font-display-local);font-size:1.5rem;font-weight:800;color:var(--accent);letter-spacing:-0.02em;">${followBackRate}%</div>
+                <div style="font-size:0.625rem;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Follow-Back Rate</div>
+              </div>
+            </div>
+            <div style="color:var(--accent);font-size:0.8125rem;font-weight:700;white-space:nowrap;">
+              View full analysis &rarr;
+            </div>
+          </a>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;font-weight:500;">Based on data export from ${Utils.formatDate(latest.timestamp)}</div>
+        `;
+
+      } catch (e) {
+        // No snapshots, section stays hidden
+      }
+    }
+
+  </script>
+
+</body>
+</html>

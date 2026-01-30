@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Settings — IG Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <!-- Connection Status -->
+    <section class="animate-in stagger-1" id="connection-section">
+      <div class="section-header">
+        <h1 class="section-title">Settings</h1>
+      </div>
+
+      <div class="glass-card" id="connection-card" style="padding:1.5rem;margin-bottom:1.5rem;">
+        <div id="connection-status">
+          <div class="flex items-center gap-2" style="gap:1rem;">
+            <div class="skeleton skeleton-avatar"></div>
+            <div style="flex:1">
+              <div class="skeleton skeleton-text md"></div>
+              <div class="skeleton skeleton-text sm"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Token Setup -->
+    <section class="animate-in stagger-2" id="token-section">
+      <h2 style="font-size:1.125rem;margin-bottom:1rem;">API Token</h2>
+      <div class="glass-card" style="padding:1.5rem;margin-bottom:1.5rem;">
+        <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:1rem;">
+          Paste your Instagram Graph API long-lived access token below. You can generate one from the
+          <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Meta Graph API Explorer</a>.
+        </p>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <input type="password" class="input" id="token-input" placeholder="Paste access token..." style="flex:1;min-width:0;" />
+          <button class="btn btn-primary" id="save-token-btn">Save &amp; Connect</button>
+        </div>
+        <div id="token-feedback" style="margin-top:0.75rem;font-size:0.8125rem;display:none;"></div>
+      </div>
+    </section>
+
+    <!-- Sync Controls -->
+    <section class="animate-in stagger-3" id="sync-section">
+      <h2 style="font-size:1.125rem;margin-bottom:1rem;">Sync Controls</h2>
+      <div class="glass-card" style="padding:1.5rem;margin-bottom:1.5rem;">
+        <div class="flex items-center justify-between" style="flex-wrap:wrap;gap:1rem;">
+          <div>
+            <div id="sync-last" style="font-size:0.8125rem;color:var(--text-secondary);">Last sync: Never</div>
+            <div id="sync-calls" style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.25rem;"></div>
+          </div>
+          <div class="flex gap-1" style="gap:0.75rem;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="quick-sync-btn" disabled>Quick Sync</button>
+            <button class="btn btn-secondary" id="full-sync-btn" disabled>Full Sync</button>
+            <button class="btn btn-secondary" id="deep-sync-btn" disabled>Deep Sync</button>
+          </div>
+        </div>
+        <div id="sync-progress" class="hidden" style="margin-top:1rem;">
+          <div class="progress-bar" style="margin-bottom:0.5rem;">
+            <div class="progress-bar-fill" id="sync-progress-bar" style="width:0%"></div>
+          </div>
+          <div id="sync-progress-text" style="font-size:0.75rem;color:var(--text-secondary);"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Token Refresh -->
+    <section class="animate-in stagger-4" id="refresh-section" style="display:none;">
+      <h2 style="font-size:1.125rem;margin-bottom:1rem;">Token Refresh</h2>
+      <div class="glass-card" style="padding:1.5rem;margin-bottom:1.5rem;">
+        <div class="flex items-center justify-between" style="flex-wrap:wrap;gap:1rem;">
+          <div>
+            <div id="token-expiry-info" style="font-size:0.8125rem;color:var(--text-secondary);"></div>
+            <div id="token-refreshed-info" style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.25rem;"></div>
+          </div>
+          <button class="btn btn-primary" id="refresh-token-btn">Refresh Token</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Legacy Upload (Collapsible) -->
+    <section class="animate-in stagger-5">
+      <div class="glass-card" style="margin-bottom:1.5rem;overflow:hidden;">
+        <div class="collapsible-header" id="legacy-toggle">
+          <h2 style="font-size:1.125rem;font-family:var(--font-display);">Advanced: Legacy ZIP Upload</h2>
+          <span class="arrow" style="font-size:0.75rem;color:var(--text-tertiary);">&#9660;</span>
+        </div>
+        <div class="collapsible-body" id="legacy-body">
+          <div style="padding:0 1.5rem 1.5rem;">
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:1rem;">
+              Upload your Instagram data export ZIP for username-based analysis (unfollowers, not-following-back, mutual followers, wasted comments).
+              Request your data from Instagram &rarr; Settings &rarr; Privacy &rarr; Download your data.
+            </p>
+            <div id="upload-zone" style="border:2px dashed var(--border-color);border-radius:var(--radius-md);padding:2rem;text-align:center;cursor:pointer;transition:border-color 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:0.5rem;">&#128193;</div>
+              <div style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.25rem;">Drop ZIP or JSON files here</div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);">or click to browse</div>
+              <input type="file" id="file-input" accept=".zip,.json" multiple style="display:none;" />
+            </div>
+            <div id="upload-status" class="hidden" style="margin-top:1rem;">
+              <div class="progress-bar" style="margin-bottom:0.5rem;">
+                <div class="progress-bar-fill" id="upload-progress-bar" style="width:0%"></div>
+              </div>
+              <div id="upload-progress-text" style="font-size:0.75rem;color:var(--text-secondary);"></div>
+            </div>
+            <div id="upload-result" class="hidden" style="margin-top:1rem;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    // ---- Init ----
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('settings');
+      PageTransition.init();
+
+      await PasswordModal.show();
+
+      try {
+        Store.init();
+      } catch (e) {
+        ToastManager.error('Firebase Error', e.message);
+        return;
+      }
+
+      loadConnectionStatus();
+      loadSyncInfo();
+      setupTokenForm();
+      setupSyncButtons();
+      setupTokenRefresh();
+      setupLegacyUpload();
+      setupCollapsible();
+    });
+
+    // ---- Connection Status ----
+    async function loadConnectionStatus() {
+      const el = document.getElementById('connection-status');
+      const config = await Store.getConfig();
+
+      if (!config || !config.accessToken) {
+        el.innerHTML = `
+          <div class="flex items-center gap-2" style="gap:1rem;">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">&#128279;</div>
+            <div>
+              <div style="font-weight:600;">Not Connected</div>
+              <div style="font-size:0.8125rem;color:var(--text-secondary);">Add your Instagram API token below to get started.</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const username = config.igUsername || 'Unknown';
+      const status = config.lastSyncStatus || 'unknown';
+      const statusBadge = status === 'success'
+        ? '<span class="badge badge-success">Connected</span>'
+        : status === 'error'
+        ? '<span class="badge badge-error">Error</span>'
+        : '<span class="badge badge-warning">Unknown</span>';
+
+      // Token expiry
+      let expiryNote = '';
+      if (config.tokenExpiresAt) {
+        const days = Math.ceil((new Date(config.tokenExpiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+        if (days <= 0) {
+          expiryNote = '<span style="color:var(--color-negative);font-size:0.75rem;"> &bull; Token expired</span>';
+        } else if (days <= 7) {
+          expiryNote = `<span style="color:var(--color-warning);font-size:0.75rem;"> &bull; Expires in ${days}d</span>`;
+        } else {
+          expiryNote = `<span style="font-size:0.75rem;color:var(--text-tertiary);"> &bull; Expires in ${days}d</span>`;
+        }
+      }
+
+      el.innerHTML = `
+        <div class="flex items-center gap-2" style="gap:1rem;">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--ig-purple),var(--ig-pink));display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:700;flex-shrink:0;">
+            ${username.charAt(0).toUpperCase()}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div class="flex items-center gap-1" style="gap:0.5rem;flex-wrap:wrap;">
+              <span style="font-weight:600;">@${username}</span>
+              ${statusBadge}
+              ${expiryNote}
+            </div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary);margin-top:0.15rem;">
+              User ID: ${config.igUserId || '—'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Enable sync buttons
+      document.getElementById('quick-sync-btn').disabled = false;
+      document.getElementById('full-sync-btn').disabled = false;
+      document.getElementById('deep-sync-btn').disabled = false;
+
+      // Show refresh section
+      if (config.tokenExpiresAt) {
+        showRefreshSection(config);
+      }
+    }
+
+    // ---- Sync Info ----
+    async function loadSyncInfo() {
+      const config = await Store.getConfig();
+      const syncLastEl = document.getElementById('sync-last');
+      const syncCallsEl = document.getElementById('sync-calls');
+
+      if (config?.lastSyncAt) {
+        syncLastEl.textContent = `Last sync: ${Utils.timeAgo(config.lastSyncAt)}`;
+      }
+
+      const remaining = InstagramAPI.callsRemaining;
+      syncCallsEl.textContent = `API calls remaining this hour: ${remaining}/180`;
+    }
+
+    // ---- Token Form ----
+    function setupTokenForm() {
+      const input = document.getElementById('token-input');
+      const btn = document.getElementById('save-token-btn');
+      const feedback = document.getElementById('token-feedback');
+
+      btn.addEventListener('click', async () => {
+        const token = input.value.trim();
+        if (!token) {
+          showFeedback(feedback, 'Please paste a token.', 'warning');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Testing...';
+        showFeedback(feedback, 'Verifying token with Instagram API...', 'info');
+
+        try {
+          // Save token temporarily
+          await Store.saveConfig({ accessToken: token });
+
+          // Test it by calling /me
+          const profile = await InstagramAPI.getProfile();
+
+          // Save full config
+          const now = new Date().toISOString();
+          await Store.saveConfig({
+            accessToken: token,
+            igUserId: profile.id,
+            igUsername: profile.username,
+            tokenRefreshedAt: now,
+            tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+            lastSyncAt: now,
+            lastSyncStatus: 'success'
+          });
+
+          // Save initial account insight
+          const today = now.split('T')[0];
+          await Store.saveAccountInsights(today, {
+            followerCount: profile.followers_count,
+            followingCount: profile.follows_count,
+            mediaCount: profile.media_count
+          });
+
+          // Log the initial sync
+          await Store.addSync({
+            type: 'api',
+            followerCount: profile.followers_count,
+            followingCount: profile.follows_count,
+            mediaCount: profile.media_count,
+            apiCallsUsed: 1,
+            status: 'success'
+          });
+
+          showFeedback(feedback, `Connected as @${profile.username} (${Utils.formatNumber(profile.followers_count)} followers)`, 'success');
+          ToastManager.success('Connected', `Linked to @${profile.username}`);
+
+          input.value = '';
+          loadConnectionStatus();
+          loadSyncInfo();
+
+        } catch (err) {
+          showFeedback(feedback, `Connection failed: ${err.message}`, 'error');
+          ToastManager.error('Connection Failed', err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Save & Connect';
+        }
+      });
+    }
+
+    function showFeedback(el, text, type) {
+      el.style.display = 'block';
+      el.textContent = text;
+      el.style.color = type === 'success' ? 'var(--color-positive)'
+        : type === 'error' ? 'var(--color-negative)'
+        : type === 'warning' ? 'var(--color-warning)'
+        : 'var(--color-info)';
+    }
+
+    // ---- Sync Buttons ----
+    function setupSyncButtons() {
+      document.getElementById('quick-sync-btn').addEventListener('click', () => runSync('quick'));
+      document.getElementById('full-sync-btn').addEventListener('click', () => runSync('full'));
+      document.getElementById('deep-sync-btn').addEventListener('click', () => runSync('deep'));
+    }
+
+    async function runSync(type) {
+      const btns = ['quick-sync-btn', 'full-sync-btn', 'deep-sync-btn'].map(id => document.getElementById(id));
+      btns.forEach(b => b.disabled = true);
+
+      const progressSection = document.getElementById('sync-progress');
+      const progressBar = document.getElementById('sync-progress-bar');
+      const progressText = document.getElementById('sync-progress-text');
+      progressSection.classList.remove('hidden');
+      progressBar.style.width = '0%';
+
+      try {
+        let result;
+
+        if (type === 'quick') {
+          progressText.textContent = 'Running quick sync...';
+          progressBar.style.width = '50%';
+          result = await InstagramAPI.quickSync();
+          progressBar.style.width = '100%';
+        } else {
+          const deep = type === 'deep';
+          result = await InstagramAPI.fullSync({
+            deep,
+            onProgress(msg) {
+              progressText.textContent = msg;
+              // Estimate progress based on message
+              if (msg.includes('profile')) progressBar.style.width = '10%';
+              else if (msg.includes('posts')) progressBar.style.width = '20%';
+              else if (msg.includes('insights')) {
+                const match = msg.match(/(\d+)\/(\d+)/);
+                if (match) {
+                  const pct = 20 + (parseInt(match[1]) / parseInt(match[2])) * 55;
+                  progressBar.style.width = pct + '%';
+                }
+              }
+              else if (msg.includes('account')) progressBar.style.width = '80%';
+              else if (msg.includes('audience')) progressBar.style.width = '90%';
+              else if (msg.includes('Saving')) progressBar.style.width = '95%';
+            }
+          });
+          progressBar.style.width = '100%';
+        }
+
+        progressText.textContent = `Sync complete! ${result.callsUsed} API calls used.`;
+        ToastManager.success('Sync Complete', `${result.postsProcessed ? result.postsProcessed + ' posts synced. ' : ''}${result.callsUsed} API calls used.`);
+
+        loadConnectionStatus();
+        loadSyncInfo();
+
+      } catch (err) {
+        progressText.textContent = `Sync failed: ${err.message}`;
+        progressBar.style.width = '100%';
+        progressBar.style.background = '#ef4444';
+        ToastManager.error('Sync Failed', err.message);
+      } finally {
+        btns.forEach(b => b.disabled = false);
+        setTimeout(() => {
+          progressSection.classList.add('hidden');
+          progressBar.style.background = '';
+        }, 5000);
+      }
+    }
+
+    // ---- Token Refresh ----
+    function showRefreshSection(config) {
+      const section = document.getElementById('refresh-section');
+      section.style.display = 'block';
+
+      const expiresAt = new Date(config.tokenExpiresAt);
+      const daysLeft = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+
+      document.getElementById('token-expiry-info').textContent =
+        daysLeft > 0
+          ? `Token expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (${Utils.formatDate(config.tokenExpiresAt)})`
+          : 'Token has expired!';
+
+      if (config.tokenRefreshedAt) {
+        document.getElementById('token-refreshed-info').textContent =
+          `Last refreshed: ${Utils.formatDate(config.tokenRefreshedAt)}`;
+      }
+    }
+
+    function setupTokenRefresh() {
+      document.getElementById('refresh-token-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('refresh-token-btn');
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+
+        try {
+          await InstagramAPI.refreshToken();
+          ToastManager.success('Token Refreshed', 'Your token has been refreshed for another 60 days.');
+          loadConnectionStatus();
+        } catch (err) {
+          ToastManager.error('Refresh Failed', err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Refresh Token';
+        }
+      });
+    }
+
+    // ---- Collapsible ----
+    function setupCollapsible() {
+      const toggle = document.getElementById('legacy-toggle');
+      const body = document.getElementById('legacy-body');
+
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('open');
+        body.classList.toggle('open');
+      });
+    }
+
+    // ---- Legacy ZIP Upload ----
+    function setupLegacyUpload() {
+      const zone = document.getElementById('upload-zone');
+      const fileInput = document.getElementById('file-input');
+      const statusEl = document.getElementById('upload-status');
+      const progressBar = document.getElementById('upload-progress-bar');
+      const progressText = document.getElementById('upload-progress-text');
+      const resultEl = document.getElementById('upload-result');
+
+      zone.addEventListener('click', () => fileInput.click());
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--ig-purple)';
+      });
+
+      zone.addEventListener('dragleave', () => {
+        zone.style.borderColor = 'var(--border-color)';
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--border-color)';
+        handleFiles(e.dataTransfer.files);
+      });
+
+      fileInput.addEventListener('change', () => {
+        handleFiles(fileInput.files);
+        fileInput.value = '';
+      });
+
+      async function handleFiles(files) {
+        if (!files.length) return;
+
+        statusEl.classList.remove('hidden');
+        resultEl.classList.add('hidden');
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Processing files...';
+
+        try {
+          let followers = [];
+          let following = [];
+          let comments = [];
+
+          for (const file of files) {
+            if (file.name.endsWith('.zip')) {
+              progressText.textContent = 'Extracting ZIP...';
+              progressBar.style.width = '20%';
+
+              const zip = await JSZip.loadAsync(file);
+              const parsed = await parseZip(zip);
+              followers = parsed.followers;
+              following = parsed.following;
+              comments = parsed.comments;
+
+            } else if (file.name.endsWith('.json')) {
+              const text = await file.text();
+              const json = JSON.parse(text);
+
+              if (file.name.includes('follower')) {
+                followers = extractUsernames(json);
+              } else if (file.name.includes('following')) {
+                following = extractUsernames(json);
+              } else if (file.name.includes('comment')) {
+                comments = extractComments(json);
+              }
+            }
+          }
+
+          progressText.textContent = 'Saving to Firestore...';
+          progressBar.style.width = '80%';
+
+          const commentedAccounts = [...new Set(comments.map(c => c.username))];
+
+          const snapshot = {
+            followers,
+            following,
+            comments,
+            followerCount: followers.length,
+            followingCount: following.length,
+            commentedAccounts,
+            commentCount: comments.length
+          };
+
+          await Store.addSnapshot(snapshot);
+
+          // Log sync
+          await Store.addSync({
+            type: 'manual_upload',
+            followerCount: followers.length,
+            followingCount: following.length,
+            status: 'success'
+          });
+
+          progressBar.style.width = '100%';
+          progressText.textContent = 'Upload complete!';
+
+          // Show result summary
+          const notFollowingBack = following.filter(u => !followers.includes(u));
+          const fans = followers.filter(u => !following.includes(u));
+          const mutuals = followers.filter(u => following.includes(u));
+
+          resultEl.classList.remove('hidden');
+          resultEl.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem;">
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Followers</div>
+                <div style="font-size:1.25rem;font-weight:700;">${Utils.formatNumber(followers.length)}</div>
+              </div>
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Following</div>
+                <div style="font-size:1.25rem;font-weight:700;">${Utils.formatNumber(following.length)}</div>
+              </div>
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Not Following Back</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-negative);">${Utils.formatNumber(notFollowingBack.length)}</div>
+              </div>
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Fans</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-positive);">${Utils.formatNumber(fans.length)}</div>
+              </div>
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Mutuals</div>
+                <div style="font-size:1.25rem;font-weight:700;color:var(--color-info);">${Utils.formatNumber(mutuals.length)}</div>
+              </div>
+              <div class="glass-card-static" style="padding:1rem;text-align:center;">
+                <div class="metric-label">Comments</div>
+                <div style="font-size:1.25rem;font-weight:700;">${Utils.formatNumber(comments.length)}</div>
+              </div>
+            </div>
+          `;
+
+          ToastManager.success('Upload Complete', `${followers.length} followers, ${following.length} following processed.`);
+
+        } catch (err) {
+          progressText.textContent = `Error: ${err.message}`;
+          progressBar.style.background = '#ef4444';
+          ToastManager.error('Upload Failed', err.message);
+        }
+      }
+
+      async function parseZip(zip) {
+        let followers = [];
+        let following = [];
+        let comments = [];
+
+        for (const [path, zipEntry] of Object.entries(zip.files)) {
+          if (zipEntry.dir) continue;
+          const name = path.toLowerCase();
+
+          if (name.includes('followers') && name.endsWith('.json')) {
+            const text = await zipEntry.async('text');
+            try {
+              followers = extractUsernames(JSON.parse(text));
+            } catch (e) { console.warn('Failed to parse followers:', e); }
+          }
+
+          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
+            const text = await zipEntry.async('text');
+            try {
+              following = extractUsernames(JSON.parse(text));
+            } catch (e) { console.warn('Failed to parse following:', e); }
+          }
+
+          if (name.includes('comment') && name.endsWith('.json')) {
+            const text = await zipEntry.async('text');
+            try {
+              const parsed = extractComments(JSON.parse(text));
+              comments = comments.concat(parsed);
+            } catch (e) { console.warn('Failed to parse comments:', e); }
+          }
+        }
+
+        return { followers, following, comments };
+      }
+
+      function extractUsernames(json) {
+        // Instagram export formats:
+        // New format: array of objects with string_list_data[0].value
+        // Old format: { relationships_followers: [...] }
+        if (Array.isArray(json)) {
+          return json.map(item => {
+            if (item.string_list_data?.[0]?.value) return item.string_list_data[0].value;
+            if (item.value) return item.value;
+            if (typeof item === 'string') return item;
+            return null;
+          }).filter(Boolean);
+        }
+
+        // Check nested structures
+        const key = Object.keys(json).find(k =>
+          k.includes('follower') || k.includes('following')
+        );
+        if (key && Array.isArray(json[key])) {
+          return extractUsernames(json[key]);
+        }
+
+        return [];
+      }
+
+      function extractComments(json) {
+        const comments = [];
+
+        function walk(data) {
+          if (Array.isArray(data)) {
+            data.forEach(walk);
+          } else if (data && typeof data === 'object') {
+            // Look for comment-like structures
+            if (data.string_list_data || data.value || data.comment) {
+              const text = data.string_list_data?.[0]?.value || data.value || data.comment || '';
+              const username = data.string_list_data?.[0]?.href
+                ? data.title || ''
+                : data.username || data.title || data.author || '';
+              const timestamp = data.string_list_data?.[0]?.timestamp || data.timestamp || 0;
+
+              if (text || username) {
+                comments.push({ username, comment: text, timestamp });
+              }
+            }
+            Object.values(data).forEach(walk);
+          }
+        }
+
+        walk(json);
+        return comments;
+      }
+    }
+  </script>
+
+</body>
+</html>
