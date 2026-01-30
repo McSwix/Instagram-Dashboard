@@ -611,6 +611,7 @@
         if (Array.isArray(json)) {
           return json.map(item => {
             if (item.string_list_data?.[0]?.value) return item.string_list_data[0].value;
+            if (item.title) return item.title;
             if (item.value) return item.value;
             if (typeof item === 'string') return item;
             return null;
