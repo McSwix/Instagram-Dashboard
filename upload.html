@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f0f2f5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <title>Upload Data — IG Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    .upload-hero {
+      text-align: center;
+      padding: 2.5rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .upload-hero-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+      font-size: 1.75rem;
+    }
+    .upload-hero h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-hero p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .upload-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+      transform: translateY(-1px);
+    }
+    .upload-zone-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      transition: background 0.2s;
+    }
+    .upload-zone:hover .upload-zone-icon {
+      background: var(--accent-light);
+    }
+    .upload-zone-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--accent);
+    }
+    .upload-zone-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+    .upload-zone-sub {
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+    }
+    .upload-zone-formats {
+      display: inline-flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .format-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      background: var(--bg-input);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* Progress */
+    .upload-progress {
+      margin-top: 1.5rem;
+      display: none;
+    }
+    .upload-progress.active { display: block; }
+    .upload-progress-text {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+    }
+
+    /* Results */
+    .upload-results {
+      display: none;
+      margin-top: 1.5rem;
+    }
+    .upload-results.active { display: block; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 640px) { .results-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 380px) { .results-grid { grid-template-columns: 1fr; } }
+
+    .result-card {
+      padding: 1rem;
+      text-align: center;
+    }
+    .result-card-value {
+      font-family: var(--font-display);
+      font-size: 1.375rem;
+      font-weight: 700;
+    }
+    .result-card-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-tertiary);
+      margin-top: 0.15rem;
+    }
+
+    /* Steps guide */
+    .steps-section {
+      margin-top: 2rem;
+    }
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+    }
+    .step-number {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.875rem;
+      flex-shrink: 0;
+    }
+    .step-content h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.2rem;
+    }
+    .step-content p {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Previous uploads */
+    .previous-uploads {
+      margin-top: 2rem;
+    }
+    .prev-upload-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.875rem 1.25rem;
+      border-bottom: 1px solid var(--border-light);
+      gap: 1rem;
+    }
+    .prev-upload-item:last-child { border-bottom: none; }
+    .prev-upload-date {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .prev-upload-counts {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.15rem;
+    }
+    .prev-upload-badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      background: #dcfce7;
+      color: #15803d;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 480px) {
+      .upload-hero { padding: 1.5rem 1rem; }
+      .upload-zone { padding: 2rem 1rem; }
+      .step-item { padding: 0.875rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-container page-content" id="page">
+
+    <!-- Hero -->
+    <div class="glass-card upload-hero animate-in stagger-1">
+      <div class="upload-hero-icon">
+        <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+      </div>
+      <h1>Upload Instagram Data</h1>
+      <p>Upload your Instagram data export to unlock follower analysis &mdash; see who's not following back, your fans, mutual followers, and wasted engagement.</p>
+    </div>
+
+    <!-- Upload Zone -->
+    <section class="animate-in stagger-2" style="margin-bottom:1.5rem;">
+      <div class="glass-card" style="padding:1.5rem;">
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-zone-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+          </div>
+          <div class="upload-zone-title">Drop your files here or click to browse</div>
+          <div class="upload-zone-sub">Instagram data export ZIP or individual JSON files</div>
+          <div class="upload-zone-formats">
+            <span class="format-badge">.zip</span>
+            <span class="format-badge">.json</span>
+          </div>
+          <input type="file" id="file-input" accept=".zip,.json" multiple style="display:none;" />
+        </div>
+
+        <!-- Progress -->
+        <div class="upload-progress" id="upload-progress">
+          <div class="progress-bar" style="margin-bottom:0.5rem;">
+            <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+          </div>
+          <div class="upload-progress-text" id="progress-text">Processing...</div>
+        </div>
+
+        <!-- Results -->
+        <div class="upload-results" id="upload-results">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+            <div style="width:24px;height:24px;border-radius:50%;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            </div>
+            <span style="font-weight:600;font-size:0.9375rem;">Upload complete</span>
+          </div>
+          <div class="results-grid" id="results-grid"></div>
+          <a href="followers.html" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:0.5rem;">
+            View Follower Analysis
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- How to get your data -->
+    <section class="steps-section animate-in stagger-3" style="margin-bottom:1.5rem;">
+      <div class="section-header" style="margin-bottom:1rem;">
+        <h2 class="section-title">How to get your data</h2>
+      </div>
+      <div class="glass-card" style="overflow:hidden;">
+        <div class="steps-list">
+          <div class="step-item">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h3>Open Instagram Settings</h3>
+              <p>Go to your Instagram app &rarr; Settings &rarr; Accounts Centre &rarr; Your information and permissions</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h3>Download your information</h3>
+              <p>Tap "Download your information" &rarr; "Download or transfer information" &rarr; select your Instagram account</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h3>Choose your data</h3>
+              <p>Select "Some of your information" &rarr; tick <strong>Followers</strong>, <strong>Following</strong>, and <strong>Comments</strong> &rarr; choose JSON format &rarr; request download</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <h3>Upload here</h3>
+              <p>Once Instagram emails you the download link, save the ZIP file and drag it into the upload zone above.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Previous Uploads -->
+    <section class="previous-uploads animate-in stagger-4" id="prev-uploads-section" style="margin-bottom:1.5rem;display:none;">
+      <div class="section-header" style="margin-bottom:1rem;">
+        <h2 class="section-title">Previous Uploads</h2>
+      </div>
+      <div class="glass-card" id="prev-uploads" style="overflow:hidden;"></div>
+    </section>
+
+  </div>
+
+  <script src="js/firestore-store.js"></script>
+  <script src="js/instagram-api.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      Nav.inject('upload');
+      PageTransition.init();
+      await PasswordModal.show();
+
+      try { Store.init(); } catch (e) { ToastManager.error('Firebase Error', e.message); return; }
+      TokenWarning.check();
+
+      setupUpload();
+      loadPreviousUploads();
+    });
+
+    // ---- Upload Logic ----
+    function setupUpload() {
+      const zone = document.getElementById('upload-zone');
+      const fileInput = document.getElementById('file-input');
+      const progressEl = document.getElementById('upload-progress');
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const resultsEl = document.getElementById('upload-results');
+      const resultsGrid = document.getElementById('results-grid');
+
+      zone.addEventListener('click', () => fileInput.click());
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('dragover');
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+
+      fileInput.addEventListener('change', () => {
+        handleFiles(fileInput.files);
+        fileInput.value = '';
+      });
+
+      async function handleFiles(files) {
+        if (!files.length) return;
+
+        progressEl.classList.add('active');
+        resultsEl.classList.remove('active');
+        progressBar.style.width = '0%';
+        progressBar.style.background = '';
+        progressText.textContent = 'Processing files...';
+
+        try {
+          let followers = [];
+          let following = [];
+          let comments = [];
+
+          for (const file of files) {
+            if (file.name.endsWith('.zip')) {
+              progressText.textContent = 'Extracting ZIP archive...';
+              progressBar.style.width = '20%';
+
+              const zip = await JSZip.loadAsync(file);
+              const parsed = await parseZip(zip);
+              followers = parsed.followers;
+              following = parsed.following;
+              comments = parsed.comments;
+
+            } else if (file.name.endsWith('.json')) {
+              const text = await file.text();
+              const json = JSON.parse(text);
+
+              if (file.name.includes('follower')) {
+                followers = extractUsernames(json);
+              } else if (file.name.includes('following')) {
+                following = extractUsernames(json);
+              } else if (file.name.includes('comment')) {
+                comments = extractComments(json);
+              }
+            }
+          }
+
+          progressText.textContent = 'Saving to database...';
+          progressBar.style.width = '80%';
+
+          const commentedAccounts = [...new Set(comments.map(c => c.username))];
+
+          await Store.addSnapshot({
+            followers,
+            following,
+            comments,
+            followerCount: followers.length,
+            followingCount: following.length,
+            commentedAccounts,
+            commentCount: comments.length
+          });
+
+          await Store.addSync({
+            type: 'manual_upload',
+            followerCount: followers.length,
+            followingCount: following.length,
+            status: 'success'
+          });
+
+          progressBar.style.width = '100%';
+          progressText.textContent = 'Done!';
+
+          // Compute quick stats
+          const followersSet = new Set(followers);
+          const followingSet = new Set(following);
+          const notFollowingBack = following.filter(u => !followersSet.has(u));
+          const fans = followers.filter(u => !followingSet.has(u));
+          const mutuals = followers.filter(u => followingSet.has(u));
+
+          resultsGrid.innerHTML = `
+            <div class="glass-card-static result-card">
+              <div class="result-card-value">${Utils.formatNumber(followers.length)}</div>
+              <div class="result-card-label">Followers</div>
+            </div>
+            <div class="glass-card-static result-card">
+              <div class="result-card-value">${Utils.formatNumber(following.length)}</div>
+              <div class="result-card-label">Following</div>
+            </div>
+            <div class="glass-card-static result-card">
+              <div class="result-card-value" style="color:var(--color-negative);">${Utils.formatNumber(notFollowingBack.length)}</div>
+              <div class="result-card-label">Not Following Back</div>
+            </div>
+            <div class="glass-card-static result-card">
+              <div class="result-card-value" style="color:var(--color-positive);">${Utils.formatNumber(fans.length)}</div>
+              <div class="result-card-label">Fans</div>
+            </div>
+            <div class="glass-card-static result-card">
+              <div class="result-card-value" style="color:var(--color-info);">${Utils.formatNumber(mutuals.length)}</div>
+              <div class="result-card-label">Mutuals</div>
+            </div>
+            <div class="glass-card-static result-card">
+              <div class="result-card-value">${Utils.formatNumber(comments.length)}</div>
+              <div class="result-card-label">Comments</div>
+            </div>
+          `;
+
+          setTimeout(() => {
+            progressEl.classList.remove('active');
+            resultsEl.classList.add('active');
+          }, 600);
+
+          ToastManager.success('Upload Complete', `${followers.length} followers, ${following.length} following processed.`);
+          loadPreviousUploads();
+
+        } catch (err) {
+          progressText.textContent = `Error: ${err.message}`;
+          progressBar.style.width = '100%';
+          progressBar.style.background = '#ef4444';
+          ToastManager.error('Upload Failed', err.message);
+        }
+      }
+
+      async function parseZip(zip) {
+        let followers = [];
+        let following = [];
+        let comments = [];
+
+        const entries = Object.entries(zip.files);
+        let processed = 0;
+
+        for (const [path, zipEntry] of entries) {
+          if (zipEntry.dir) continue;
+          const name = path.toLowerCase();
+
+          processed++;
+          progressBar.style.width = (20 + (processed / entries.length) * 50) + '%';
+
+          if (name.includes('followers') && name.endsWith('.json')) {
+            try {
+              progressText.textContent = 'Parsing followers...';
+              followers = extractUsernames(JSON.parse(await zipEntry.async('text')));
+            } catch (e) { console.warn('Failed to parse followers:', e); }
+          }
+
+          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
+            try {
+              progressText.textContent = 'Parsing following...';
+              following = extractUsernames(JSON.parse(await zipEntry.async('text')));
+            } catch (e) { console.warn('Failed to parse following:', e); }
+          }
+
+          if (name.includes('comment') && name.endsWith('.json')) {
+            try {
+              progressText.textContent = 'Parsing comments...';
+              comments = comments.concat(extractComments(JSON.parse(await zipEntry.async('text'))));
+            } catch (e) { console.warn('Failed to parse comments:', e); }
+          }
+        }
+
+        return { followers, following, comments };
+      }
+
+      function extractUsernames(json) {
+        if (Array.isArray(json)) {
+          return json.map(item => {
+            if (item.string_list_data?.[0]?.value) return item.string_list_data[0].value;
+            if (item.value) return item.value;
+            if (typeof item === 'string') return item;
+            return null;
+          }).filter(Boolean);
+        }
+
+        const key = Object.keys(json).find(k =>
+          k.includes('follower') || k.includes('following')
+        );
+        if (key && Array.isArray(json[key])) {
+          return extractUsernames(json[key]);
+        }
+
+        return [];
+      }
+
+      function extractComments(json) {
+        const comments = [];
+
+        function walk(data) {
+          if (Array.isArray(data)) {
+            data.forEach(walk);
+          } else if (data && typeof data === 'object') {
+            if (data.string_list_data || data.value || data.comment) {
+              const text = data.string_list_data?.[0]?.value || data.value || data.comment || '';
+              const username = data.string_list_data?.[0]?.href
+                ? data.title || ''
+                : data.username || data.title || data.author || '';
+              const timestamp = data.string_list_data?.[0]?.timestamp || data.timestamp || 0;
+
+              if (text || username) {
+                comments.push({ username, comment: text, timestamp });
+              }
+            }
+            Object.values(data).forEach(walk);
+          }
+        }
+
+        walk(json);
+        return comments;
+      }
+    }
+
+    // ---- Previous Uploads ----
+    async function loadPreviousUploads() {
+      const section = document.getElementById('prev-uploads-section');
+      const container = document.getElementById('prev-uploads');
+
+      try {
+        const syncs = await Store.getRecentSyncs(50);
+        const uploads = syncs.filter(s => s.type === 'manual_upload' && s.status === 'success');
+
+        if (!uploads.length) return;
+
+        section.style.display = 'block';
+
+        container.innerHTML = uploads.map(u => `
+          <div class="prev-upload-item">
+            <div>
+              <div class="prev-upload-date">${Utils.formatDate(u.timestamp)}</div>
+              <div class="prev-upload-counts">${Utils.formatNumber(u.followerCount || 0)} followers &middot; ${Utils.formatNumber(u.followingCount || 0)} following</div>
+            </div>
+            <div class="prev-upload-badge">Processed</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        // No uploads yet
+      }
+    }
+  </script>
+
+</body>
+</html>
