@@ -498,35 +498,51 @@
         const entries = Object.entries(zip.files);
         let processed = 0;
 
+        console.log('ZIP contents:', entries.map(([p]) => p));
+
         for (const [path, zipEntry] of entries) {
           if (zipEntry.dir) continue;
-          const name = path.toLowerCase();
+          const fullPath = path.toLowerCase();
+          // Use just the filename for matching to avoid parent folder name collisions
+          const filename = fullPath.split('/').pop();
 
           processed++;
           progressBar.style.width = (20 + (processed / entries.length) * 50) + '%';
 
-          if (name.includes('followers') && name.endsWith('.json')) {
+          if (!filename.endsWith('.json')) continue;
+
+          console.log('Processing:', path, '-> filename:', filename);
+
+          // Match followers files: followers_1.json, followers_2.json, followers.json
+          if (filename.startsWith('followers') || filename.includes('followers_')) {
             try {
               progressText.textContent = 'Parsing followers...';
-              followers = extractUsernames(JSON.parse(await zipEntry.async('text')));
-            } catch (e) { console.warn('Failed to parse followers:', e); }
+              const parsed = extractUsernames(JSON.parse(await zipEntry.async('text')));
+              followers = followers.concat(parsed);
+              console.log(`  -> Found ${parsed.length} followers`);
+            } catch (e) { console.warn('Failed to parse followers:', path, e); }
           }
-
-          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
+          // Match following files: following.json, following_1.json
+          else if (filename.startsWith('following') || filename.includes('following_')) {
             try {
               progressText.textContent = 'Parsing following...';
-              following = extractUsernames(JSON.parse(await zipEntry.async('text')));
-            } catch (e) { console.warn('Failed to parse following:', e); }
+              const parsed = extractUsernames(JSON.parse(await zipEntry.async('text')));
+              following = following.concat(parsed);
+              console.log(`  -> Found ${parsed.length} following`);
+            } catch (e) { console.warn('Failed to parse following:', path, e); }
           }
-
-          if (name.includes('comment') && name.endsWith('.json')) {
+          // Match comment files
+          else if (filename.includes('comment')) {
             try {
               progressText.textContent = 'Parsing comments...';
-              comments = comments.concat(extractComments(JSON.parse(await zipEntry.async('text'))));
-            } catch (e) { console.warn('Failed to parse comments:', e); }
+              const parsed = extractComments(JSON.parse(await zipEntry.async('text')));
+              comments = comments.concat(parsed);
+              console.log(`  -> Found ${parsed.length} comments`);
+            } catch (e) { console.warn('Failed to parse comments:', path, e); }
           }
         }
 
+        console.log(`ZIP parse complete: ${followers.length} followers, ${following.length} following, ${comments.length} comments`);
         return { followers, following, comments };
       }
 

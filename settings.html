@@ -577,27 +577,26 @@
 
         for (const [path, zipEntry] of Object.entries(zip.files)) {
           if (zipEntry.dir) continue;
-          const name = path.toLowerCase();
+          const fullPath = path.toLowerCase();
+          const filename = fullPath.split('/').pop();
 
-          if (name.includes('followers') && name.endsWith('.json')) {
-            const text = await zipEntry.async('text');
+          if (!filename.endsWith('.json')) continue;
+
+          if (filename.startsWith('followers') || filename.includes('followers_')) {
             try {
-              followers = extractUsernames(JSON.parse(text));
+              const parsed = extractUsernames(JSON.parse(await zipEntry.async('text')));
+              followers = followers.concat(parsed);
             } catch (e) { console.warn('Failed to parse followers:', e); }
           }
-
-          if (name.includes('following') && !name.includes('followers') && name.endsWith('.json')) {
-            const text = await zipEntry.async('text');
+          else if (filename.startsWith('following') || filename.includes('following_')) {
             try {
-              following = extractUsernames(JSON.parse(text));
+              const parsed = extractUsernames(JSON.parse(await zipEntry.async('text')));
+              following = following.concat(parsed);
             } catch (e) { console.warn('Failed to parse following:', e); }
           }
-
-          if (name.includes('comment') && name.endsWith('.json')) {
-            const text = await zipEntry.async('text');
+          else if (filename.includes('comment')) {
             try {
-              const parsed = extractComments(JSON.parse(text));
-              comments = comments.concat(parsed);
+              comments = comments.concat(extractComments(JSON.parse(await zipEntry.async('text'))));
             } catch (e) { console.warn('Failed to parse comments:', e); }
           }
         }
