@@ -192,35 +192,63 @@ const InstagramAPI = {
         }
         return insights;
       } catch (err) {
-        if (err.statusCode === 400) {
-          // Try next metric set
+        // 400 = unsupported metrics for this media type, try next set
+        // 100 = non-existent/expired media
+        // Some IG error codes also indicate unsupported insights
+        if (err.statusCode === 400 || err.igErrorCode === 100) {
+          console.warn(`Insights metric set failed for ${mediaId}: ${err.message}, trying fallback...`);
           continue;
         }
-        throw err;
+        // For rate limits, re-throw immediately
+        if (err instanceof RateLimitError) throw err;
+        // For any other error, log and skip this post rather than crashing the sync
+        console.warn(`Insights error for ${mediaId} (${mediaType}): ${err.message}`);
+        return null;
       }
     }
 
-    // All metric sets failed — return null
-    console.warn(`Insights unavailable for media ${mediaId} (${mediaType})`);
+    // All metric sets failed — return null (post will keep likes/comments from basic data)
+    console.warn(`All insight metric sets failed for media ${mediaId} (${mediaType})`);
     return null;
   },
 
   // --- Account Insights ---
   async getAccountInsights(since, until) {
-    const result = await this._fetch('/me/insights', {
-      metric: 'impressions,reach,follower_count',
-      period: 'day',
-      since: Math.floor(new Date(since).getTime() / 1000),
-      until: Math.floor(new Date(until).getTime() / 1000)
-    });
+    // Try multiple metric sets — Instagram has changed metric names over time
+    const metricSets = [
+      'impressions,reach,follower_count',
+      'impressions,reach',
+      'reach,follower_count',
+      'reach'
+    ];
 
-    const insights = {};
-    if (result.data) {
-      result.data.forEach(metric => {
-        insights[metric.name] = metric.values || [];
-      });
+    for (const metrics of metricSets) {
+      try {
+        const result = await this._fetch('/me/insights', {
+          metric: metrics,
+          period: 'day',
+          since: Math.floor(new Date(since).getTime() / 1000),
+          until: Math.floor(new Date(until).getTime() / 1000)
+        });
+
+        const insights = {};
+        if (result.data) {
+          result.data.forEach(metric => {
+            insights[metric.name] = metric.values || [];
+          });
+        }
+        console.log('Account insights fetched with metrics:', metrics, 'Keys:', Object.keys(insights));
+        return insights;
+      } catch (err) {
+        console.warn('Account insights failed with metrics [' + metrics + ']:', err.message);
+        if (err instanceof RateLimitError) throw err;
+        if (err.statusCode === 400) continue;
+        throw err;
+      }
     }
-    return insights;
+
+    console.warn('All account insight metric sets failed');
+    return {};
   },
 
   // --- Audience Demographics ---
